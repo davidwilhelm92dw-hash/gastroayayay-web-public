@@ -57,8 +57,15 @@ class Page {
     this.ws = ws;
     this.id = 0;
     this.pending = new Map();
+    this.logs = [];
     ws.addEventListener('message', (ev) => {
       const msg = JSON.parse(ev.data);
+      if (msg.method === 'Runtime.exceptionThrown') {
+        const d = msg.params.exceptionDetails;
+        this.logs.push(`Ausnahme: ${d.exception?.description || d.text}`.slice(0, 400));
+      } else if (msg.method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(msg.params.type)) {
+        this.logs.push(`${msg.params.type}: ${msg.params.args.map((a) => a.value ?? a.description ?? '').join(' ')}`.slice(0, 400));
+      }
       const p = msg.id && this.pending.get(msg.id);
       if (!p) return;
       this.pending.delete(msg.id);
@@ -123,6 +130,7 @@ async function openTarget(targets) {
     ws.addEventListener('error', () => reject(new Error('WebSocket-Fehler')), { once: true });
   });
   current = new Page(ws);
+  await current.send('Runtime.enable').catch(() => {});
   return current;
 }
 
@@ -156,6 +164,19 @@ async function connect() {
   throw new Error('WebView-Debugging nicht erreichbar');
 }
 
+/** Lage der WebView auf dem Bildschirm (Statusleiste, Navigationsleiste). */
+let webviewOffset = null;
+function readWebviewOffset() {
+  try {
+    const xml = adb('exec-out', 'uiautomator', 'dump', '/dev/tty');
+    const m = xml.match(/class="android\.webkit\.WebView"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+    if (m) return { x: +m[1], y: +m[2], bottom: +m[4] };
+  } catch {
+    /* uiautomator nicht verfügbar */
+  }
+  return { x: 0, y: 0, bottom: null };
+}
+
 /** Echtes Antippen: Element in der WebView finden, Bildschirmkoordinaten per adb antippen. */
 async function tapEl(page, selector) {
   const box = await page.evaluate((sel) => {
@@ -176,8 +197,10 @@ async function tapEl(page, selector) {
     await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: point });
     await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   } else {
-    // Ab Android 15 läuft die App randlos: WebView-Koordinaten = Bildschirmkoordinaten
-    adb('shell', 'input', 'tap', String(Math.round(again.x * box.dpr)), String(Math.round(again.y * box.dpr)));
+    if (!webviewOffset) webviewOffset = readWebviewOffset();
+    const x = webviewOffset.x + Math.round(again.x * box.dpr);
+    const y = webviewOffset.y + Math.round(again.y * box.dpr);
+    adb('shell', 'input', 'tap', String(x), String(y));
   }
   await sleep(700);
 }
@@ -202,10 +225,57 @@ async function main() {
   }
   let page = await connect();
   await waitFor(page, () => window.__mindstella);
+  // einmal neu laden, damit auch Fehler beim Start in der Konsole mitgeschnitten werden
+  await page.send('Page.reload', {}).catch(() => {});
+  await sleep(4000);
+  await waitFor(page, () => window.__mindstella);
   const info = await page.evaluate(() => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio, ua: navigator.userAgent, gl: !!document.createElement('canvas').getContext('webgl2') }));
   check('App startet, WebGL verfügbar', info.gl, JSON.stringify(info));
+  if (!LOCAL) {
+    webviewOffset = readWebviewOffset();
+    console.log(`INFO WebView-Lage in Pixeln: ${JSON.stringify(webviewOffset)}`);
+  }
   await sleep(3000);
   await shot('01-start');
+  const gl = await page.evaluate(() => new Promise((resolve) => {
+    const { world } = window.__mindstella;
+    const r = world.renderer;
+    const c = r.domElement;
+    const ctx = r.getContext();
+    // zwei Frames warten, dann direkt nach dem Rendern der App Pixel lesen
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const w = ctx.drawingBufferWidth;
+      const h = ctx.drawingBufferHeight;
+      const px = new Uint8Array(4);
+      const samples = [];
+      for (const [fx, fy] of [[0.5, 0.1], [0.5, 0.35], [0.5, 0.5], [0.2, 0.6], [0.8, 0.8]]) {
+        ctx.readPixels(Math.floor(w * fx), Math.floor(h * (1 - fy)), 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, px);
+        samples.push([...px].join(','));
+      }
+      const rect = c.getBoundingClientRect();
+      const cs = getComputedStyle(c);
+      resolve({
+        lost: ctx.isContextLost(),
+        buffer: [w, h],
+        rect: [rect.left, rect.top, rect.width, rect.height].map(Math.round),
+        display: cs.display,
+        visibility: cs.visibility,
+        opacity: cs.opacity,
+        z: cs.zIndex,
+        calls: r.info.render.calls,
+        triangles: r.info.render.triangles,
+        renderer: ctx.getParameter(ctx.RENDERER),
+        samples,
+      });
+    }));
+  }));
+  const distinct = new Set(gl.samples).size;
+  check('3D-Welt wird gerendert (Pixelprobe)', !gl.lost && gl.calls > 0 && distinct >= 3, JSON.stringify(gl));
+  if (!LOCAL) {
+    // vollständiges Bildschirmfoto als PNG ins Log, um WebView-Aufnahme und Bildschirm zu vergleichen
+    const png = execFileSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 64 * 1024 * 1024 });
+    console.log(`=====PNG 01-start=====\n${png.toString('base64')}\n=====ENDE 01-start=====`);
+  }
 
   await tapText(page, 'Kapitel 1 beginnen');
   await sleep(2500);
@@ -336,6 +406,7 @@ try {
     /* kein Bildschirmfoto möglich */
   }
 }
+if (current && current.logs.length) console.log(`INFO Konsole der App:\n  ${current.logs.join('\n  ')}`);
 writeFileSync('device-results.json', JSON.stringify(results, null, 2));
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} Geräteprüfungen bestanden.`);
