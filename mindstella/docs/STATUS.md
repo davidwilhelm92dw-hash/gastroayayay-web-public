@@ -24,11 +24,12 @@ Stand: 26. Oktober 2026. Entwicklung und Selbstprüfung erfolgten in derselben H
 
 **End-to-End-Test der Web-Fassung** (`npm run test:e2e`, Chromium mit Software-Rendering, Handyformat 360 × 760): siehe Abschnitt „Ergebnis E2E“ unten. Geprüft werden unter anderem Doppeltipps über die echte Oberfläche, Neustart mitten in der Aufgabe, Pause über Neustart hinweg, Parken, Verkleinern, kurze (2) und lange (20) Liste, unbekannte Aufgabe, Ausweis der fehlenden Aufnahme, Wiedergabe, Position und Fortsetzen der Wissensfolge mit einer Test-Audiodatei, Überschneidungsfreiheit von Vorlesen und Folge, Spotify-Link, Test-Neustart und fehlerfreie Konsole.
 
+**Android-Build:** GitHub-Actions-Lauf 40375819743 am 26.10.2026 erfolgreich (Unit-Tests, Gradle `assembleDebug`, Android-Lint); APK als Artefakt `mindstella-testfassung` (4,2 MB, 30 Tage abrufbar). Auf einem Gerät installiert ist sie noch nicht.
+
 **Kompilierprüfung des Java-Codes** gegen das Android-Framework (Robolectric `android-all` API 36) mit Stubs für Capacitor und AndroidX. Dabei wurde ein Initialisierungsfehler in `PodcastPlayer.java` gefunden und behoben. Ein vollständiger Gradle-Build war in der Entwicklungsumgebung nicht möglich, weil `dl.google.com` (Android SDK, AndroidX) gesperrt war.
 
 ## Implementiert, aber nicht geprüft
 
-- Der gesamte Android-Build (Gradle, Ressourcen, Manifest, Plugin-Registrierung). Erster echter Nachweis ist der GitHub-Actions-Lauf.
 - Rückkehrhilfe nach 30 Sekunden, Unterscheidung zwischen Appwechsel und Displaysperre, Aufheben bei Rückkehr, Pause oder Sperre, Antippen der Benachrichtigung.
 - Benachrichtigungsfreigabe unter Android 13 und neuer.
 - Android-Spracherkennung (`RecognizerIntent`) und Sprachausgabe (`TextToSpeech`).
@@ -46,8 +47,6 @@ Stand: 26. Oktober 2026. Entwicklung und Selbstprüfung erfolgten in derselben H
 
 ## Blockiert
 
-- **Push nach GitHub:** Der Push auf `claude/mindstella-prototype-chapter-one-kyozrr` wurde mit HTTP 403 abgelehnt; die Claude-GitHub-App hat für dieses Repository keinen Schreibzugriff. Die Arbeit liegt als Commit in der Sitzung vor. Abhilfe: GitHub unter https://claude.ai/connect-github neu verbinden bzw. die Claude-GitHub-App für das Repository installieren. Erst danach läuft der APK-Build.
-- **Installierbare APK:** Hängt am Push und am ersten Actions-Lauf.
 - **Audiodatei der Wissensfolge:** In der Entwicklungsumgebung war keine geeignete deutsche Sprachsynthese verfügbar (Modell-Downloads gesperrt). Skript und Einbindung sind fertig.
 - **Spotify-Primärquellen:** `developer.spotify.com` war nicht erreichbar; die Policy wurde über Suchergebnisse geprüft (siehe `docs/SPOTIFY.md`).
 
