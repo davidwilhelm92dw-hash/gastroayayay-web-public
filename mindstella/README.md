@@ -23,8 +23,8 @@ Die App ist eine Android-App auf Basis von [Capacitor 8](https://capacitorjs.com
 
 ```
 src/
-  domain/      Spielstand, Fortschrittsverteilung, Vorlagen (rein, ohne DOM, getestet)
-  world/       Gelände, Vegetation, Kapsel, Hütte, Figuren, Szenensteuerung
+  domain/      Spielstand, Fortschrittsverteilung, Räume und Tätigkeiten, Vorlagen (rein, ohne DOM, getestet)
+  world/       Gelände, Vegetation, Monde, Kapsel, Hütte, Hauptfigur, Kamera und Szenensteuerung
   content/     Wissenskarten, Quellen, Skript der Wissensfolge
   app/         App-Steuerung, Speicherung, Audio-Koordination
   ui/          Bildschirme, Einblendungen, Logo, DOM-Helfer
@@ -35,7 +35,8 @@ android/app/src/main/java/de/mindstella/prototyp/
   ReminderReceiver.java    AlarmManager-Rückfallebene
   PodcastPlayer.java       Wiedergabe mit Audiofokus
 tests/unit/    Node-Test-Runner: Fortschritt, Spielstand, Vorlagen
-tests/e2e/     Playwright-Durchlauf der Web-Fassung mit Screenshots
+tests/e2e/     Playwright-Durchlauf der Web-Fassung mit Screenshots (Handyformat, Touch)
+tools/device-test.*  Gerätetest im Android-Emulator (GitHub Actions)
 docs/          Status, Testanleitung, Spotify-Prüfung, Skript der Wissensfolge
 ```
 
@@ -45,7 +46,7 @@ Der Spielstand liegt als ein JSON-Dokument unter dem Schlüssel `mindstella.save
 
 ### Baufortschritt bei beliebiger Schrittzahl
 
-Die Hütte besteht aus 74 Bauelementen in sieben Abschnitten (`src/world/hutPlan.js`). Beim Abhaken werden die noch fehlenden Elemente gleichmäßig auf die offenen Schritte verteilt, der letzte Schritt erhält den Rest (`src/domain/progress.js`). Daraus folgt: Jeder Schritt baut mindestens ein Element, bereits Gebautes bleibt stehen, und Verkleinern oder ein Abbruch verändern nur die Verteilung des Rests. Ein Abhaken muss die ID des aktuellen Schritts mitgeben; ein schneller zweiter Tipp trägt eine veraltete ID und wird verworfen. Zusätzlich sperrt die Oberfläche den Knopf für 700 ms.
+Die Hütte besteht aus 82 Bauelementen in acht Abschnitten: Holz sammeln, Steinsockel und Schwellen, Boden, Tragwerk, Aussteifung, Wände, Dach, Witterungsschutz (`src/world/hutPlan.js`). Die Abschnitte sind keine festen Schrittblöcke; wie viele Elemente ein Schritt baut, ergibt sich allein aus der Zahl der offenen Schritte. Beim Abhaken werden die noch fehlenden Elemente gleichmäßig auf die offenen Schritte verteilt, der letzte Schritt erhält den Rest (`src/domain/progress.js`). Daraus folgt: Jeder Schritt baut mindestens ein Element, bereits Gebautes bleibt stehen, und Verkleinern oder ein Abbruch verändern nur die Verteilung des Rests. Ein Abhaken muss die ID des aktuellen Schritts mitgeben; ein schneller zweiter Tipp trägt eine veraltete ID und wird verworfen. Zusätzlich sperrt die Oberfläche den Knopf für 700 ms.
 
 ## Entwickeln und testen
 
@@ -66,13 +67,15 @@ npx vite preview --port 4173 &
 npm run test:e2e         # Screenshots landen in tests/e2e/screenshots/
 ```
 
+Einzelne Abschnitte lassen sich mit `MINDSTELLA_ONLY=raeume,layout npm run test:e2e` ausführen. Der Abschnitt `layout` prüft auf 360 × 740 und 320 × 568 Pixeln, dass Figur, Baustelle und alle drei Monde sichtbar und nicht von der Aufgabenkarte verdeckt sind.
+
 Die Browser-Vorschau zeigt Welt und Ablauf vollständig. Rückkehrhilfe, Benachrichtigungsrecht und die Android-Spracherkennung gibt es dort nicht; die Vorschau weist das jeweils aus.
 
 ## Android-Testfassung bauen
 
 ### Über GitHub Actions (empfohlen)
 
-Der Workflow `.github/workflows/mindstella-android.yml` baut bei jeder Änderung unter `mindstella/` eine Debug-APK und lädt sie als Artefakt `mindstella-testfassung` hoch (30 Tage gespeichert). In GitHub: *Actions* → *Mindstella Android-Testfassung* → letzter Lauf → *Artifacts*. Der Lauf lässt sich dort auch manuell starten.
+Der Workflow `.github/workflows/mindstella-android.yml` baut bei jeder Änderung unter `mindstella/` eine Debug-APK und lädt sie als Artefakt `mindstella-testfassung` hoch (30 Tage gespeichert). Ein zweiter Job installiert die APK in einem Android-15-Emulator mit 360 dp Breite und bedient sie mit echten Touch-Eingaben (`tools/device-test.mjs`); Ergebnisse und Bildschirmfotos liegen im Artefakt `geraetetest-ergebnisse`. Der Job schlägt bei einzelnen Fehlprüfungen nicht fehl, die Ergebniszeilen `OK`/`FAIL` stehen im Log. In GitHub: *Actions* → *Mindstella Android-Testfassung* → letzter Lauf → *Artifacts*. Der Lauf lässt sich dort auch manuell starten.
 
 Ohne weitere Einrichtung signiert jeder Lauf mit einem neuen temporären Debug-Schlüssel. Android lehnt dann ein Update über eine ältere Installation ab; die alte Fassung muss vorher deinstalliert werden, wobei der lokale Spielstand verloren geht. Für gleichbleibende Signaturen einmalig einen Test-Keystore anlegen und als Repository-Secrets hinterlegen:
 

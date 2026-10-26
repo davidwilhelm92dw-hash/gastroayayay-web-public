@@ -1,76 +1,58 @@
 # Status Prototyp Kapitel 1
 
-Stand: 26. Oktober 2026. Entwicklung und Selbstprüfung erfolgten in derselben Hand; eine unabhängige Qualitätsprüfung steht aus.
+Stand: 26. Oktober 2026, nach dem Ergänzungsauftrag (ein Hauptcharakter, räumliche Welt, Hausarbeit nach Räumen). Entwicklung und Selbstprüfung erfolgten in derselben Hand; eine unabhängige Qualitätsprüfung steht aus.
 
 ## Erledigt
 
-- Vollständiger Quellcode der Android-App (Capacitor 8, Three.js) mit eigenem nativem Plugin für Spracheingabe, Sprachausgabe, Rückkehrhilfe, Wissensfolgen-Wiedergabe und Spotify-Link.
-- Fünf Figuren (Abenteurerin, Abenteurer, Forscherin, Forscher, geschlechtsneutrale Figur „Navigation“) mit längeren, wilden Haaren und Pilotenbrille, deren Lederband durchgehend von der Außenkante des einen Glases um den Hinterkopf zur Außenkante des anderen läuft.
-- Zusammenhängende Welt: Wiese mit fremdartiger Vegetation, Gebirge mit Pass, drei Monde, verunglückte Landekapsel mit Schleifspur, Vorratskisten, Materiallager, Signal hinter dem Pass nach Kapitelabschluss.
-- Geschichte nach Vorgabe: Bruchlandung nach Kollision, Funkkontakt abgerissen, Signal hinter dem Gebirge; Einführung überspringbar und mit Überblick über die sieben Bauabschnitte.
-- Hütte aus 74 Bauelementen; Fortschrittsverteilung für beliebige Schrittzahl; genau eine vollständige Hütte pro abgeschlossener Hauptaufgabe; Verkleinern ohne Zusatzbelohnung und ohne Verlust an Gebautem.
-- Aufgabenerfassung per Text oder Systemspracherkennung mit vorherigem Datenschutzhinweis, Zerlegung diktierter Schritte, gespeicherte Abläufe vor Vorlagen, drei Vorlagen, ehrliche Rückfrage bei unbekannten Aufgaben, Bearbeiten und Umsortieren vor dem Start.
-- Hilfen: Pause, Schritt verkleinern, Gedanken parken (Text oder Sprache), „Faden sichern“ als optionales Feld im selben Erfassungsablauf, Anzeige beim Abschluss.
-- Acht Wissenskarten mit getrennter Kennzeichnung von Sachwissen und Fiktion sowie Quellenangaben; freischaltend je Bauabschnitt, jederzeit schließbar.
-- Hörwahl mit drei Optionen; Spotify nur als Playlist-Link; Wissensfolgen-Player mit Zeit, Position, Fortsetzen auf Wunsch; Koordination mit Sprachbegleitung und Aufgabenpause.
-- Skript der Wissensfolge (842 Wörter, ca. 6,5 Minuten), Fiktion und Sachwissen gekennzeichnet, mit Quellen.
-- Test-Neustart, Einstellungen für Sprachbegleitung, Haptik, Ton und reduzierte Bewegung.
-- App-Symbol und Startbild mit dem Mindstella-Zeichen; kein Cloud-Backup der persönlichen Aufgaben.
-- GitHub-Actions-Workflow für eine reproduzierbare Debug-APK, Build-Anleitung, Testanleitung.
+- **Ein fester Hauptcharakter.** Figurenwahl und Auswahlbildschirm sind entfernt, es gibt keinen Editor. Die Figur folgt den Referenzbildern in Kleidung, Proportionen und Materialien: offene Jacke über olivgrünem Hemd mit hochgekrempelten Ärmeln, Cargohose mit Taschen, Stiefel, Gürtel, Rucksack. Die Haare sind zerzaust und etwas kürzer als in der vorigen langen Fassung, die Pilotenbrille sitzt auf dem Kopf, das Lederband läuft von der Außenkante der Gläser um den Hinterkopf und hat eine Schnalle. Das Gesicht ist bewusst nicht geschlechtlich festgelegt.
+- **Welt.** Plateau mit Bauplatz und Weg im Vordergrund, Hang zum See mit Inseln, bewaldeter Hügel, drei gestaffelte Bergketten, fremdartige Nadelbäume und Pflanzen, drei Monde als feste Himmelsrichtungen. Keine Häuser, Städte, Laternen oder Siedlungslichter. Tag und Nacht zeigen dieselbe Geografie; die Nacht kommt nur beim Kapitelabschluss, ein automatischer Tageswechsel ist nicht eingebaut.
+- **Kamera.** Leicht erhöht hinter der Figur. Die Oberfläche meldet den freien Bildbereich über der Aufgabenkarte, die Kamera passt Abstand und Bildmitte so an, dass Figur und bisher Gebautes darin Platz finden.
+- **Bauübersicht vor dem Kapitel** mit acht Abschnitten: Holz sammeln, Unterbau (Steinsockel und Schwellen), Boden, Tragwerk, Aussteifung, Wände, Dach, Witterungsschutz. Der Hinweis erklärt, dass jeder abgehakte Schritt den Bau weiterbringt, unabhängig von der Schrittzahl.
+- **Hütte aus 82 Bauelementen.** Eine Hauptaufgabe ergibt genau eine vollständige Hütte; jeder Schritt baut mindestens ein sichtbares Element. Die Figur geht erst nach „Erledigt“ los, holt im ersten Abschnitt Stämme vom Holzplatz und arbeitet danach an der Baustelle. Warten erzeugt keinen Fortschritt.
+- **Hausarbeit nach Räumen.** Küche, Bad, Wohnzimmer, Schlafzimmer, Flur, Wäsche; je Raum antippbare Tätigkeiten, häufige oben, seltenere darunter. Die gewählten Tätigkeiten werden in eine sinnvolle Reihenfolge gebracht (Bad: Spiegel, Waschbecken, Ablagen, Toilette zuletzt). Kleine Tätigkeiten wie Fernseher abstauben (Wohn- und Schlafzimmer) und Sofakissen hinrichten sind enthalten. Eigene Aufgaben per Text oder Sprache bleiben möglich.
+- **Beibehalten:** Hörwahl (Spotify-Playlist-Link, Wissensfolge, ohne Audio), lokale Speicherung, Wiederaufnahme, Pause, Verkleinern, Gedanken parken, Wissenskarten, Rückkehrhilfe. Keine kostenpflichtigen Dienste.
+- **Kompakte Aufgabenkarte** im Spiel: Raum, aktueller Schritt, Fortschritt, „Erledigt“, darunter Pause, Kleiner, Parken. Logo und Prozentanzeige sind im Spiel ausgeblendet, damit mehr Welt sichtbar bleibt.
+- **Gerätetest im Android-Emulator** als zweiter Job im GitHub-Actions-Workflow (siehe unten).
 
 ## Tatsächlich geprüft
 
-**Unit-Tests** (`npm test`, 20 Prüfungen, alle bestanden): Fortschrittsverteilung für 1 bis 74 Schritte, gleichmäßige Verteilung, Doppeltipp auf Logikebene, Verkleinern, Pause, Parken, Speichern und Laden, Abbruch mit anschließender Fertigstellung, leere Eingaben, beschädigter Spielstand, Zerlegung diktierter Texte, Vorlagen- und Ablaufzuordnung.
+**Unit-Tests** (`npm test`): 25 von 25 bestanden. Neu: Räume und Tätigkeiten (Reihenfolge, Toilette zuletzt, Fernseher in beiden Zimmern, Standardauswahl), Vorlagen aus den Räumen.
 
-**End-to-End-Test der Web-Fassung** (`npm run test:e2e`, Chromium mit Software-Rendering, Handyformat 360 × 760): siehe Abschnitt „Ergebnis E2E“ unten. Geprüft werden unter anderem Doppeltipps über die echte Oberfläche, Neustart mitten in der Aufgabe, Pause über Neustart hinweg, Parken, Verkleinern, kurze (2) und lange (20) Liste, unbekannte Aufgabe, Ausweis der fehlenden Aufnahme, Wiedergabe, Position und Fortsetzen der Wissensfolge mit einer Test-Audiodatei, Überschneidungsfreiheit von Vorlesen und Folge, Spotify-Link, Test-Neustart und fehlerfreie Konsole.
+**End-to-End-Test der Web-Fassung** (`npm run test:e2e`, Chromium mit Software-Rendering, Mobilemulation mit Touch): 83 von 83 Prüfungen bestanden. Dazu gehören:
 
-**Android-Build:** GitHub-Actions-Lauf 40375819743 am 26.10.2026 erfolgreich (Unit-Tests, Gradle `assembleDebug`, Android-Lint); APK als Artefakt `mindstella-testfassung` (4,2 MB, 30 Tage abrufbar). Auf einem Gerät installiert ist sie noch nicht.
+- Raumauswahl: alle sechs Räume und alle Tätigkeiten per Antippen an- und abwählbar, Reihenfolge im Bad, Fernseher im Schlafzimmer, Übernahme in die Schrittliste.
+- Layout auf 360 × 740 und 320 × 568 Pixeln: Figur mindestens 9 Prozent der Bildhöhe, Figur und Baustelle vollständig über der Aufgabenkarte, alle drei Monde im freien Bildbereich, Bauhandlung nach „Erledigt“.
+- Bestehende Abläufe: Doppeltipps, Neustart mitten in der Aufgabe, Pause über Neustart, Parken, Verkleinern, kurze und lange Listen, unbekannte Aufgabe, Ausweis der fehlenden Aufnahme, Wissensfolge mit Test-Audiodatei, Spotify-Link, Test-Neustart, fehlerfreie Konsole.
 
-**Kompilierprüfung des Java-Codes** gegen das Android-Framework (Robolectric `android-all` API 36) mit Stubs für Capacitor und AndroidX. Dabei wurde ein Initialisierungsfehler in `PodcastPlayer.java` gefunden und behoben. Ein vollständiger Gradle-Build war in der Entwicklungsumgebung nicht möglich, weil `dl.google.com` (Android SDK, AndroidX) gesperrt war.
+**Android-Build:** Jeder Push baut eine Debug-APK (Artefakt `mindstella-testfassung`).
+
+**Gerätetest im Emulator** (Android 15, 360 dp breit, echte Touch-Eingaben über adb): Auswertung des aktuellen Laufs steht noch aus; Start und Bauübersicht liefen im vorherigen Lauf durch, die 3D-Welt war in der Aufnahme nicht sichtbar (Ursache wird geprüft).
 
 ## Implementiert, aber nicht geprüft
 
-- Rückkehrhilfe nach 30 Sekunden, Unterscheidung zwischen Appwechsel und Displaysperre, Aufheben bei Rückkehr, Pause oder Sperre, Antippen der Benachrichtigung.
-- Benachrichtigungsfreigabe unter Android 13 und neuer.
-- Android-Spracherkennung (`RecognizerIntent`) und Sprachausgabe (`TextToSpeech`).
-- Native Wiedergabe der Wissensfolge mit Audiofokus, bei gesperrtem Display und nach Appwechsel.
-- Öffnen des Spotify-Links in der Spotify-App.
-- Haptik, Darstellung und Bildrate auf echten Geräten.
+- Darstellung, Bildrate und Akkulast auf echten Handys. Die Szene hat rund 225 Draw-Calls und 196 000 Dreiecke; auf schwächeren Geräten kann das ruckeln.
+- Android-Spracherkennung und Sprachausgabe, Öffnen des Spotify-Links in der Spotify-App, Haptik.
+- Native Wiedergabe der Wissensfolge (die Audiodatei fehlt weiterhin).
 
 ## Bekannte Grenzen
 
-- **Rückkehrhilfe:** Die Erkennung der Displaysperre stützt sich auf `PowerManager.isInteractive()`, `KeyguardManager.isKeyguardLocked()` und das System-Ereignis `ACTION_SCREEN_OFF`. Die genaue Verzögerung kommt von einem Handler im laufenden Prozess. Friert Android den Prozess im Hintergrund ein, greift ein nicht exakter Alarm, der sich nach Android-Regeln um bis zu etwa 75 Prozent der Wartezeit verspäten kann (also bis rund 52 Sekunden). Exakte Alarme würden eine zusätzliche, vom Nutzer zu erteilende Berechtigung erfordern und wurden bewusst nicht verwendet. Herstellerspezifische Energiesparfunktionen können die Erinnerung verzögern oder unterdrücken.
-- **Wissensfolge im Hintergrund:** Die Wiedergabe läuft ohne Vordergrunddienst. Bei längerer Displaysperre kann Android den Prozess beenden; dann bleibt die zuletzt gespeicherte Position erhalten. Zeigt der Gerätetest Abbrüche, ist ein Media-Vordergrunddienst die nächste Ausbaustufe.
-- **Spracherkennung:** Der Android-Systemdialog überträgt die Aufnahme je nach Gerät an den Anbieter des Erkennungsdienstes, meist Google. Die App weist vor der ersten Nutzung darauf hin und speichert keine Aufnahmen.
-- **Leistung:** Die Szene hat rund 130 Draw-Calls und 130 000 Dreiecke. Auf Mittelklassegeräten sollte das flüssig laufen; geprüft ist es nicht.
-- **Quellenprüfung:** Die Fachaussagen wurden anhand von Textauszügen geprüft, weil die Volltexte aus der Entwicklungsumgebung nicht abrufbar waren. Vor einer Veröffentlichung ist ein Abgleich mit den Volltexten vorgesehen.
+- **Figur:** Die Figur ist im Code aus Grundformen modelliert, nicht aus einem Modellierungsprogramm. Sie trifft Farben, Kleidung und Proportionen der Referenzen, erreicht aber nicht deren Detailgrad. Für Animationsfilm-Qualität wäre ein von Hand modelliertes und geriggtes Modell (etwa aus Blender als glTF) der nächste Schritt.
+- **Rückkehrhilfe:** Der präzise Zeitgeber läuft im App-Prozess; friert Android den Prozess ein, greift ein nicht exakter Alarm, der sich bis etwa 52 Sekunden verspäten kann. Herstellerspezifische Energiesparfunktionen können die Erinnerung zusätzlich verzögern.
+- **Wissensfolge im Hintergrund:** ohne Vordergrunddienst; bei langer Displaysperre kann Android die Wiedergabe beenden, die Position bleibt gespeichert.
+- **Spracherkennung:** Der Systemdialog überträgt die Aufnahme je nach Gerät an den Anbieter des Erkennungsdienstes. Die App weist vorher darauf hin.
 
 ## Blockiert
 
-- **Audiodatei der Wissensfolge:** In der Entwicklungsumgebung war keine geeignete deutsche Sprachsynthese verfügbar (Modell-Downloads gesperrt). Skript und Einbindung sind fertig.
-- **Spotify-Primärquellen:** `developer.spotify.com` war nicht erreichbar; die Policy wurde über Suchergebnisse geprüft (siehe `docs/SPOTIFY.md`).
+- **Audiodatei der Wissensfolge:** keine geeignete deutsche Sprachsynthese in der Entwicklungsumgebung. Skript und Einbindung sind fertig.
+- **Test-Keystore:** Die Secrets kamen im Build leer an. Bitte prüfen, ob sie unter *Settings → Secrets and variables → Actions* als **Repository-Secrets** (nicht als Environment- oder Codespaces-Secrets) mit genau diesen Namen angelegt sind: `MINDSTELLA_KEYSTORE_B64`, `MINDSTELLA_KEYSTORE_PASSWORD`, `MINDSTELLA_KEY_ALIAS`, `MINDSTELLA_KEY_PASSWORD`. Bis dahin muss vor jedem Update die alte Fassung deinstalliert werden.
 
 ## Entscheidung erforderlich
 
-1. **Mindstella-Entwurf:** Der im Auftrag erwähnte Entwurf (Bildzeichen, Figuren) lag nicht bei. Das verwendete Bildzeichen (vierstrahliger Stern über Horizontbogen mit kleinem Mond) ist ein vorläufiger Platzhalter in `src/ui/logo.js` und `public/icon.svg`. Bitte den freigegebenen Entwurf nachreichen; Figuren und Zeichen werden dann angeglichen.
-2. **Öffentliches Repository:** Das Ziel-Repository `gastroayayay-web-public` ist öffentlich und dient der Website „GASTRO AYAYAY!“. Soll der Prototyp dort liegen oder in ein eigenes, privates Repository umziehen? Inhaltlich enthält der Code keine privaten Daten.
-3. **Test-Keystore:** Für Updates ohne Datenverlust einmalig einen Keystore anlegen und als Secrets hinterlegen (README).
-4. **Stimme für die Wissensfolge:** Auswahl eines Dienstes oder Werkzeugs für die einmalige Vorproduktion mit gekennzeichneter KI-Stimme.
+1. **Mindstella-Bildzeichen:** Das Zeichen in `src/ui/logo.js` und `public/icon.svg` ist weiterhin ein vorläufiger Entwurf.
+2. **Öffentliches Repository:** Der Prototyp liegt im öffentlichen Repository der Website. Soll er in ein eigenes, privates Repository umziehen?
+3. **Stimme für die Wissensfolge:** Auswahl eines Werkzeugs für die einmalige Vorproduktion.
+4. **Figur in höherer Qualität:** ob ein von Hand modelliertes Figurenmodell beauftragt oder selbst erstellt werden soll (siehe Bekannte Grenzen).
 
-## Ergebnis E2E
+## Bildschirmfotos
 
-Letzter Gesamtlauf: 48 von 48 Prüfungen bestanden. Nach der anschließenden Umstellung von Systemdialogen auf In-App-Bestätigungen wurden die betroffenen Abschnitte erneut ausgeführt: Ablauf 1 mit 24 von 24 und „Unbekannte Aufgabe“ mit 4 von 4 Prüfungen (einschließlich des neuen Hinweises vor der Spracheingabe). Ausgewählte Screenshots liegen unter `docs/screenshots/`.
-
-Während der Tests gefundene und behobene Fehler:
-
-- Abdunklung des Startbildschirms fing Tipps ab.
-- Bauanimation dauerte bei vielen Bauteilen pro Schritt bis zu 20 Sekunden; jetzt ein Gang und höchstens acht Hammerschläge.
-- Während die Wissensfolge lief, wurde die Aufgabenkarte jede Sekunde neu gezeichnet; Tipps auf „Erledigt“ konnten dadurch verloren gehen.
-- Ein durch die Doppeltipp-Sperre abgewiesener Tipp ließ den Knopf dauerhaft deaktiviert.
-- Nach einem App-Neustart konnte die gespeicherte Hörposition beim Zurückkehren in die App auf 0 gesetzt werden.
-- Initialisierungsfehler in `PodcastPlayer.java` (hätte den Android-Build verhindert).
-- Das Spotify-Linkfeld war auch bei anderer Hörwahl sichtbar.
-
-## Interaktive Vorschau
-
-Die Web-Fassung ist zusätzlich als private Claude-Vorschau veröffentlicht. Sie zeigt Welt und Ablauf; Rückkehrhilfe, Android-Spracherkennung und Benachrichtigungen fehlen dort, `window.open` für Spotify ist im Vorschaurahmen eingeschränkt. Ob die Vorschau im Claude-Rahmen fehlerfrei lädt, wurde nicht geprüft.
+Unter `docs/screenshots/` (Web-Fassung, 360 Pixel breit): Start, Bauübersicht, Raumauswahl, Tätigkeiten im Bad, Ablauf, Aufgabe mit Welt, Zustand nach einem Schritt auf 360 und 320 Pixeln, Kapitelabschluss bei Nacht.

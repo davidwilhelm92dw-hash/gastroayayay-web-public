@@ -12,12 +12,11 @@ Wer bereits eine ältere Testfassung installiert hat und beim Update die Meldung
 
 ## Erster Durchlauf
 
-1. Figur wählen, mit den Pfeilen oder per Wischen.
-2. Die kurze Einführung lesen oder überspringen.
-3. Eine echte Aufgabe eintippen oder einsprechen, die du jetzt tatsächlich erledigst. Schritte kannst du direkt mitdiktieren: „Küche aufräumen: erst Geschirr wegräumen, dann Arbeitsfläche wischen“.
-4. Die Schrittliste prüfen, ändern, umsortieren. Bei Küche, Wäsche oder „Wohnung verlassen“ schlägt die App eine Vorlage vor.
-5. Hörwahl treffen: eigene Musik über Spotify, die Wissensfolge oder ohne Audio.
-6. Aufgabe erledigen und jeden Schritt mit „Erledigt“ abhaken.
+1. „Kapitel 1 beginnen“ antippen. Die Einführung erzählt die Ausgangslage und zeigt die acht Bauabschnitte der Hütte.
+2. „Hausarbeit auswählen“ antippen, einen Raum wählen und die Tätigkeiten antippen, die du jetzt erledigst. Häufige Tätigkeiten stehen oben, seltenere darunter. Die App ordnet sie in eine sinnvolle Reihenfolge, im Bad etwa Spiegel und Flächen vor der Toilette. Alternativ eine eigene Aufgabe eintippen oder einsprechen.
+3. Die Schrittliste prüfen, ändern, umsortieren.
+4. Hörwahl treffen: eigene Musik über Spotify, die Wissensfolge oder ohne Audio.
+5. Aufgabe erledigen und jeden Schritt mit „Erledigt“ abhaken. Erst dann geht die Figur los und baut; Warten bringt keinen Fortschritt.
 
 ## Prüfliste für das echte Gerät
 
@@ -41,13 +40,15 @@ Diese Punkte lassen sich nur auf einem Android-Handy prüfen. Bitte Ergebnis, Ha
 | 14 | Mitten in der Aufgabe die App über die Übersicht schließen und neu öffnen | Derselbe Schritt, dieselbe Hütte. |
 | 15 | Schnell doppelt auf „Erledigt“ tippen | Nur ein Schritt wird abgehakt. |
 | 16 | „Weniger Bewegung“ einschalten | Bauteile erscheinen sofort, Rückmeldung bleibt verständlich. |
-| 17 | Aufgabenkarte auf dem kleinsten verfügbaren Handy | Text vollständig lesbar, Knöpfe gut treffbar. |
+| 17 | Aufgabenkarte auf dem kleinsten verfügbaren Handy | Text vollständig lesbar, Knöpfe gut treffbar; Figur, Baustelle und drei Monde bleiben über der Karte sichtbar. |
+| 18 | Alle Raumkacheln und Tätigkeiten antippen | Jede Kachel reagiert, Häkchen erscheinen und verschwinden zuverlässig. |
+| 19 | Bildlauf und Bauanimation | Notieren, ob die Welt flüssig läuft oder ruckelt. |
 
 Für die Wissensfolge (Tests zu Wiedergabe bei gesperrtem Display, Appwechsel, Audiofokus und Offline-Betrieb) muss zuerst die Audiodatei produziert und eingebunden werden. Bis dahin zeigt die App an, dass keine Aufnahme vorliegt; das ist das erwartete Verhalten dieser Fassung.
 
 ## Neu anfangen
 
-Im Menü unter „Nur für Tests“ setzt der Test-Neustart Kapitel 1 nach einer Rückfrage zurück. Figur, Einstellungen, gespeicherte Abläufe und geparkte Gedanken bleiben erhalten.
+Im Menü unter „Nur für Tests“ setzt der Test-Neustart Kapitel 1 nach einer Rückfrage zurück. Einstellungen, gespeicherte Abläufe und geparkte Gedanken bleiben erhalten.
 
 ## Rückmeldung nach dem Test
 
