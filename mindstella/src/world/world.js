@@ -88,13 +88,13 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
   function cameraTargets(outPos, outLook) {
     if (cameraMode === 'select') {
       const f = new THREE.Vector3(Math.sin(actor.heading), 0, Math.cos(actor.heading));
-      outPos.copy(actor.pos).addScaledVector(f, 2.6).add(new THREE.Vector3(0, 1.32, 0));
-      outLook.copy(actor.pos).add(new THREE.Vector3(0, 1.0, 0));
+      outPos.copy(actor.pos).addScaledVector(f, 3.0).add(new THREE.Vector3(0, 1.5, 0));
+      outLook.copy(actor.pos).add(new THREE.Vector3(0, 1.08, 0));
       return;
     }
     if (cameraMode === 'overview') {
-      outPos.set(-4.6, 3.3, 8.2);
-      outLook.set(0.2, 1.5, -0.4);
+      outPos.set(-6.2, 4.4, 10.8);
+      outLook.set(0.3, 1.5, -0.6);
       return;
     }
     // Über die Schulter: Kamera hinter der Figur, Blick auf die Hütte.
@@ -106,11 +106,13 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
     // leicht zur Frontansicht hin drehen, damit die Kamera nie hinter die Hütte schwenkt
     away.lerp(new THREE.Vector3(0, 0, 1), 0.45).normalize();
     const side = new THREE.Vector3(away.z, 0, -away.x);
-    const dist = cameraMode === 'complete' ? 6.2 : 3.4;
-    const height = cameraMode === 'complete' ? 2.4 : 2.0;
-    outPos.copy(anchor).addScaledVector(away, dist).addScaledVector(side, -0.55);
+    const complete = cameraMode === 'complete';
+    const dist = complete ? 9.5 : 4.3;
+    const height = complete ? 3.4 : 2.7;
+    outPos.copy(anchor).addScaledVector(away, dist).addScaledVector(side, complete ? 0 : -0.4);
     outPos.y = Math.max(heightAt(outPos.x, outPos.z) + height, height);
-    outLook.copy(focus).lerp(new THREE.Vector3(anchor.x, 1.1, anchor.z), 0.3);
+    outLook.copy(focus).lerp(new THREE.Vector3(anchor.x, 1.0, anchor.z), complete ? 0 : 0.25);
+    if (complete) outLook.y = 1.9;
   }
 
   /* ---------- Figur ---------- */

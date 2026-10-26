@@ -240,18 +240,36 @@ export function createHut() {
   const ghostMat = new THREE.LineBasicMaterial({ color: '#d9ecff', transparent: true, opacity: 0.55, depthWrite: false });
   const ghost = new THREE.Group();
   HUT_ELEMENTS.forEach((el, i) => {
+    // Flächen (Wände, Dach, Tür) als ein Umriss, Tragglieder mit ihren Kanten
+    if (['panel', 'roof', 'door', 'shutter', 'gable', 'gutter', 'trim'].includes(el.kind) || el.kind === 'stone') {
+      if (el.kind === 'gutter' || el.kind === 'trim' || el.label === 'Trittstein') return;
+      if (el.kind === 'gable') {
+        const node = buildElement(el, mats, i);
+        node.updateMatrixWorld(true);
+        node.traverse((o) => {
+          if (!o.isMesh) return;
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 30), ghostMat);
+          edges.matrixAutoUpdate = false;
+          edges.matrix.copy(o.matrixWorld);
+          ghost.add(edges);
+        });
+        return;
+      }
+      const box = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(...el.size)), ghostMat);
+      box.position.set(...el.pos);
+      box.rotation.set(...el.rot);
+      ghost.add(box);
+      return;
+    }
     const node = buildElement(el, mats, i);
-    node.visible = true;
     node.updateMatrixWorld(true);
-    const lines = [];
     node.traverse((o) => {
       if (!o.isMesh) return;
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 30), ghostMat);
       edges.matrixAutoUpdate = false;
       edges.matrix.copy(o.matrixWorld);
-      lines.push(edges);
+      ghost.add(edges);
     });
-    ghost.add(...lines);
   });
   ghost.visible = false;
   group.add(ghost);

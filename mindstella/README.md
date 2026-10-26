@@ -97,6 +97,10 @@ cd android
 
 Alternativ `npx cap open android` und in Android Studio starten.
 
+## App-Symbol und Startbild
+
+`node tools/render-icons.mjs` erzeugt alle Launcher-Symbole und Startbilder aus dem Mindstella-Zeichen (Playwright mit Chromium nötig). Wird das Zeichen durch den freigegebenen Entwurf ersetzt, genügt es, das SVG im Skript und in `src/ui/logo.js` auszutauschen und das Skript erneut auszuführen.
+
 ## Wissensfolge einbinden
 
 Die Audiodatei ist noch nicht produziert. Das geprüfte Skript liegt in [docs/wissensfolge-kapitel-1.md](docs/wissensfolge-kapitel-1.md) (erzeugt mit `npm run export:script`). Die fertige Datei gehört nach `public/audio/kapitel-1-huettenbau.mp3`; nach `npm run android:sync` und einem neuen Build erkennt die App sie automatisch. Bis dahin zeigt die App ausdrücklich an, dass keine Aufnahme vorliegt, und bietet das Skript zum Lesen an.

@@ -23,6 +23,8 @@ const SHOTS = path.join(here, 'screenshots');
 mkdirSync(SHOTS, { recursive: true });
 
 const results = [];
+// MINDSTELLA_ONLY=ablauf|listen|unbekannt|audio führt nur einen Abschnitt aus
+const want = (name) => !process.env.MINDSTELLA_ONLY || process.env.MINDSTELLA_ONLY === name;
 function check(name, ok, detail = '') {
   results.push({ name, ok: Boolean(ok), detail });
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}${detail ? ` – ${detail}` : ''}`);
@@ -40,9 +42,10 @@ async function newPage({ fakeSpeech = false, audioFixture = null } = {}) {
         return null;
       };
       window.__spoken = [];
+      window.__podcastPlaying = () => window.__mindstella?.app.view.podcast.playing ?? null;
       if (fakeSpeech) {
         // Nachgebildete Sprachausgabe: protokolliert Texte, endet nach 400 ms
-        window.speechSynthesis = {
+        const fake = {
           speaking: false,
           getVoices: () => [{ lang: 'de-DE', name: 'Test' }],
           cancel() {},
@@ -51,16 +54,33 @@ async function newPage({ fakeSpeech = false, audioFixture = null } = {}) {
             setTimeout(() => u.onend && u.onend(), 400);
           },
         };
-        window.SpeechSynthesisUtterance = function (text) {
-          this.text = text;
-        };
+        Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true });
+        Object.defineProperty(window, 'SpeechSynthesisUtterance', {
+          value: function (text) {
+            this.text = text;
+          },
+          configurable: true,
+        });
       }
     },
     { fakeSpeech }
   );
   if (audioFixture) {
     const body = readFileSync(audioFixture);
-    await context.route('**/audio/kapitel-1-huettenbau.mp3', (route) => route.fulfill({ status: 200, contentType: 'audio/wav', body }));
+    // mit Range-Unterstützung, damit der Browser in der Datei springen kann
+    await context.route('**/audio/kapitel-1-huettenbau.mp3', (route) => {
+      const range = route.request().headers()['range'];
+      const m = range && /bytes=(\d+)-(\d*)/.exec(range);
+      if (!m) return route.fulfill({ status: 200, contentType: 'audio/wav', headers: { 'Accept-Ranges': 'bytes' }, body });
+      const start = Number(m[1]);
+      const end = m[2] ? Number(m[2]) : body.length - 1;
+      return route.fulfill({
+        status: 206,
+        contentType: 'audio/wav',
+        headers: { 'Accept-Ranges': 'bytes', 'Content-Range': `bytes ${start}-${end}/${body.length}` },
+        body: body.subarray(start, end + 1),
+      });
+    });
   }
   const page = await context.newPage();
   const errors = [];
@@ -112,7 +132,7 @@ async function completeAll(page, { waitIdle = true } = {}) {
 }
 
 /* ========== 1. Normaler Ablauf mit Bauanimation ========== */
-{
+if (want('ablauf')) {
   const { page, context, errors } = await newPage();
   await page.waitForTimeout(1500);
   await shot(page, '01-willkommen');
@@ -211,6 +231,18 @@ async function completeAll(page, { waitIdle = true } = {}) {
   await page.getByRole('button', { name: 'Schließen' }).first().click();
   check('Wissenskarte ändert den Aufgabenstand nicht', JSON.stringify((await S(page)).task) === snapshot);
 
+  // Animation einmal vollständig gesehen; den Rest mit „Weniger Bewegung“
+  await page.getByRole('button', { name: 'Menü und Einstellungen' }).click();
+  await page.getByRole('switch', { name: /Weniger Bewegung/ }).click();
+  await page.getByRole('button', { name: 'Schließen' }).first().click();
+  check('Einstellung „Weniger Bewegung“ wird gespeichert', (await S(page)).settings.reducedMotion === true);
+  const fbBefore = (await S(page)).world.elementsBuilt;
+  await page.locator('.btn--done').click();
+  await page.waitForTimeout(300);
+  const fbText = await page.locator('.feedback').innerText();
+  check('Rückmeldung bleibt bei weniger Bewegung verständlich', (await S(page)).world.elementsBuilt > fbBefore && /Bauteil/.test(fbText), fbText);
+  await page.waitForTimeout(800);
+
   // Rest abschließen
   await completeAll(page);
   await page.waitForFunction(() => document.querySelector('h1')?.textContent === 'Die Hütte steht.', null, { timeout: 30000 });
@@ -226,10 +258,11 @@ async function completeAll(page, { waitIdle = true } = {}) {
   await shot(page, '15-abschluss-nach-neustart');
 
   // Menü und Test-Neustart
-  page.on('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Menü und Einstellungen' }).click();
   await shot(page, '16-menue');
   await tap(page, 'Test-Neustart');
+  await shot(page, '16b-bestaetigung');
+  await tap(page, 'Zurücksetzen');
   await page.waitForTimeout(800);
   st = await S(page);
   check('Test-Neustart setzt Kapitel zurück und behält die Figur', st.world.elementsBuilt === 0 && !st.world.completed && st.profile.avatarId && st.parked.length === 1);
@@ -237,7 +270,7 @@ async function completeAll(page, { waitIdle = true } = {}) {
   await context.close();
 }
 
-/* ========== 2. Kurze und lange Liste, unbekannte Aufgabe ========== */
+/* ========== 2. Kurze und lange Liste ========== */
 async function runList(label, steps) {
   const { page, context, errors } = await newPage();
   await page.evaluate(() => {
@@ -259,7 +292,7 @@ async function runList(label, steps) {
   check(`Fehlerfreie Konsole (${label})`, errors.length === 0, errors.join(' / '));
   return { page, context };
 }
-{
+if (want('listen')) {
   const { page, context } = await runList('Kurze Liste (2)', ['Ordner holen', 'Belege abheften']);
   await page.waitForTimeout(500);
   await shot(page, '17-kurze-liste-fertig');
@@ -270,7 +303,7 @@ async function runList(label, steps) {
 }
 
 /* ========== 3. Unbekannte Aufgabe ohne Schritte ========== */
-{
+if (want('unbekannt')) {
   const { page, context } = await newPage();
   await page.evaluate(() => {
     const s = window.__mindstella.store.state;
@@ -279,6 +312,18 @@ async function runList(label, steps) {
   });
   await page.evaluate(() => window.__mindstella.store.commit({ ...window.__mindstella.store.state }, { immediate: true }));
   await page.reload();
+  // Spracheingabe: zuerst Hinweis zur Datenübertragung, Ablehnen lässt Texteingabe offen
+  await page.getByRole('button', { name: 'Einsprechen' }).click();
+  await page.waitForTimeout(400);
+  const sheetText = (await page.locator('.sheet').count()) ? await page.locator('.sheet').innerText() : '';
+  const statusText = await page.locator('main p[aria-live]').innerText();
+  if (sheetText) {
+    check('Vor der Spracheingabe erscheint der Hinweis zur Datenübertragung', /übertragen/.test(sheetText));
+    await tap(page, 'Lieber tippen');
+    check('Ablehnen lässt die Texteingabe nutzbar', /tippe/.test(await page.locator('main p[aria-live]').innerText()) && (await page.locator('#task-text').isEditable()));
+  } else {
+    check('Ohne Spracherkennung bleibt die Texteingabe nutzbar', /Texteingabe/.test(statusText) && (await page.locator('#task-text').isEditable()), statusText);
+  }
   await page.fill('#task-text', 'Fahrrad reparieren');
   await tap(page, 'Weiter');
   const banner = await page.locator('.notice').first().innerText();
@@ -289,7 +334,7 @@ async function runList(label, steps) {
 }
 
 /* ========== 4. Hörwahl, Wissensfolge und Sprachbegleitung ========== */
-{
+if (want('audio')) {
   // Ohne Audiodatei: ehrlicher Hinweis
   const { page, context } = await newPage();
   await page.evaluate(() => {
@@ -329,11 +374,10 @@ try {
   fixture = null;
 }
 
-if (fixture) {
+if (fixture && want('audio')) {
   // Mit Testdatei (nur im Test, nicht Teil der App): Wiedergabe, Position, Vorlesen
   const { page, context, errors } = await newPage({ fakeSpeech: true, audioFixture: fixture });
   await page.evaluate(() => {
-    window.__podcastPlaying = () => window.__mindstella.app.view.podcast.playing;
     const s = window.__mindstella.store.state;
     s.profile.avatarId = 'forscherin';
     s.profile.introSeen = true;
@@ -362,7 +406,7 @@ if (fixture) {
   await page.waitForTimeout(1500);
   const afterSpeech = await page.evaluate(() => window.__mindstella.app.view.podcast.playing);
   spoken = await page.evaluate(() => window.__spoken);
-  check('Vorlesen und Wissensfolge überschneiden sich nicht', spoken.length >= 2 && spoken.at(-1).podcastPlaying === false && duringSpeech === false, `während: ${duringSpeech}`);
+  check('Vorlesen und Wissensfolge überschneiden sich nicht', spoken.length >= 2 && spoken.at(-1).podcastPlaying === false && duringSpeech === false, `während: ${duringSpeech}; Ansagen: ${JSON.stringify(spoken.map((x) => [x.text.slice(0, 20), x.podcastPlaying]))}`);
   check('Wissensfolge läuft nach dem Vorlesen weiter', afterSpeech === true);
 
   // Aufgabenpause pausiert die Folge
@@ -406,7 +450,7 @@ if (fixture) {
   check('Hörwahl verändert den Bau nicht', (await S(page)).world.elementsBuilt === builtNow);
   check('Fehlerfreie Konsole (Audio)', errors.length === 0, errors.join(' / '));
   await context.close();
-} else {
+} else if (want('audio')) {
   check('Wiedergabetest übersprungen (ffmpeg fehlt)', true);
 }
 

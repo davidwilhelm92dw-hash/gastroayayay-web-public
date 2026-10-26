@@ -187,15 +187,25 @@ export async function startDictation(ctx, statusEl, onText) {
     return;
   }
   if (!state.profile.speechNoticeAccepted) {
-    const ok = window.confirm(
-      'Die Spracheingabe nutzt den Spracherkennungsdienst deines Geräts, meist von Google. Dabei kann deine Aufnahme an diesen Anbieter übertragen werden. Mindstella selbst speichert keine Aufnahmen, nur den erkannten Text.\n\nSpracheingabe jetzt verwenden?'
-    );
-    if (!ok) {
-      statusEl.textContent = 'Kein Problem – tippe die Aufgabe einfach ein.';
-      return;
-    }
-    actions.acceptSpeechNotice();
+    const { askConfirm } = await import('./sheets.js');
+    askConfirm(ctx, {
+      title: 'Spracheingabe',
+      eyebrow: 'Vor der ersten Nutzung',
+      text: 'Die Spracheingabe nutzt den Spracherkennungsdienst deines Geräts, meist von Google. Dabei kann deine Aufnahme an diesen Anbieter übertragen werden.\n\nMindstella selbst speichert keine Aufnahmen, nur den erkannten Text.',
+      confirmLabel: 'Sprache verwenden',
+      cancelLabel: 'Lieber tippen',
+      onCancel: () => (statusEl.textContent = 'Kein Problem – tippe einfach.'),
+      onConfirm: () => {
+        actions.acceptSpeechNotice();
+        listenNow(actions, statusEl, onText);
+      },
+    });
+    return;
   }
+  listenNow(actions, statusEl, onText);
+}
+
+async function listenNow(actions, statusEl, onText) {
   statusEl.textContent = 'Hört zu …';
   const r = await actions.dictate();
   if (r.text) {
@@ -482,7 +492,7 @@ function complete(ctx) {
       thread ? h('p', { class: 'notice' }, h('strong', {}, 'Zurück zu: '), thread) : null,
       h('p', {}, 'Als es dunkel wird, empfängt das Funkgerät wieder das Signal – schwach, aber regelmäßig. Es kommt von jenseits des Passes.'),
       h('p', { class: 'muted' }, `Alle ${phases.length} Bauabschnitte sind fertig. Weitere Kapitel sind in diesem Prototyp noch nicht enthalten.`),
-      state.parked.length ? h('p', { class: 'muted' }, `Du hast ${state.parked.length === 1 ? 'einen Gedanken' : `${state.parked.length} Gedanken`} geparkt. Du findest sie im Menü.`) : null,
+      state.parked.length ? h('p', { class: 'muted' }, state.parked.length === 1 ? 'Du hast einen Gedanken geparkt. Du findest ihn im Menü.' : `Du hast ${state.parked.length} Gedanken geparkt. Du findest sie im Menü.`) : null,
       h(
         'div',
         { class: 'row row--wrap', style: 'margin-top:6px' },

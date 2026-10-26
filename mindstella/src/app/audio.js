@@ -22,6 +22,10 @@ export function createAudio({ getPosition, savePosition, onChange }) {
     pausedForSpeech: false,
     userPausedDuringSpeech: false,
   };
+  // Erst nach dem ersten Abspielen in dieser Sitzung gilt die Position des
+  // Players. Vorher meldet ein frisch geladener Player 0 und darf die
+  // gespeicherte Hörposition nicht überschreiben.
+  let startedThisSession = false;
   let poll = null;
   let speaking = Promise.resolve();
 
@@ -33,7 +37,7 @@ export function createAudio({ getPosition, savePosition, onChange }) {
     if (!st.available) return;
     const s = await P.podcastStatus();
     st.playing = s.playing;
-    if (Number.isFinite(s.position)) st.position = s.position;
+    if (startedThisSession && Number.isFinite(s.position)) st.position = s.position;
     if (s.duration) st.duration = s.duration;
     emit();
   }
@@ -89,6 +93,7 @@ export function createAudio({ getPosition, savePosition, onChange }) {
       st.userPausedDuringSpeech = false;
       try {
         await P.podcastPlay(st.position);
+        startedThisSession = true;
         st.playing = true;
         startPolling();
       } catch (err) {
@@ -128,6 +133,7 @@ export function createAudio({ getPosition, savePosition, onChange }) {
           await P.podcastPause();
           await refresh();
           st.playing = false;
+          emit();
         }
         await P.speak(text);
         if (wasPlaying) {
@@ -148,7 +154,7 @@ export function createAudio({ getPosition, savePosition, onChange }) {
     },
     /** Beim Zurückkehren in die App: Stand abfragen, ohne fortzusetzen. */
     async sync() {
-      if (!st.checked) return;
+      if (!st.checked || !startedThisSession) return;
       await refresh();
       if (st.playing) startPolling();
       savePosition(st.position);

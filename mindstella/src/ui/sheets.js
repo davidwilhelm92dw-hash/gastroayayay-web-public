@@ -331,7 +331,7 @@ function menu(ctx) {
           {},
           h('h3', {}, 'Aufgabe abbrechen'),
           h('p', { class: 'muted' }, 'Bereits Gebautes bleibt stehen. Die nächste Aufgabe baut die Hütte fertig.'),
-          h('button', { class: 'btn btn--danger', onclick: () => { if (window.confirm('Aufgabe wirklich abbrechen? Bereits Gebautes bleibt stehen.')) actions.abandonTask(); } }, 'Aufgabe abbrechen')
+          h('button', { class: 'btn btn--danger', onclick: () => askConfirm(ctx, { title: 'Aufgabe abbrechen?', text: 'Bereits Gebautes bleibt stehen. Die nächste Aufgabe baut die Hütte fertig.', confirmLabel: 'Aufgabe abbrechen', cancelLabel: 'Weitermachen', danger: true, onConfirm: actions.abandonTask }) }, 'Aufgabe abbrechen')
         )
       : null,
     h(
@@ -339,7 +339,7 @@ function menu(ctx) {
       {},
       h('h3', {}, 'Nur für Tests'),
       h('p', { class: 'muted' }, 'Setzt Kapitel 1 zurück, damit du es erneut durchspielen kannst. Figur, Einstellungen, Abläufe und geparkte Gedanken bleiben erhalten. Das ist keine Spielfunktion.'),
-      h('button', { class: 'btn btn--danger', onclick: () => { if (window.confirm('Test-Neustart: Kapitel 1 und die laufende Aufgabe werden zurückgesetzt. Fortfahren?')) actions.resetForTesting(); } }, 'Test-Neustart')
+      h('button', { class: 'btn btn--danger', onclick: () => askConfirm(ctx, { title: 'Test-Neustart', eyebrow: 'Nur für Tests', text: 'Kapitel 1 und die laufende Aufgabe werden zurückgesetzt. Figur, Einstellungen, Abläufe und geparkte Gedanken bleiben erhalten.', confirmLabel: 'Zurücksetzen', danger: true, onConfirm: actions.resetForTesting }) }, 'Test-Neustart')
     ),
     h(
       'section',
@@ -351,4 +351,24 @@ function menu(ctx) {
   ];
 }
 
-const BUILDERS = { smaller, park, audio, script, knowledge, notifications, menu };
+/* ---------- Bestätigung ---------- */
+
+function confirm(ctx, opts) {
+  return [
+    head(opts.title, opts.eyebrow),
+    ...String(opts.text).split('\n\n').map((t) => h('p', {}, t)),
+    h(
+      'div',
+      { class: 'row', style: 'margin-top:12px' },
+      h('button', { class: 'btn btn--ghost', onclick: () => { closeSheet(); opts.onCancel?.(); } }, opts.cancelLabel || 'Abbrechen'),
+      h('button', { class: `btn ${opts.danger ? 'btn--danger' : 'btn--primary'}`, style: 'flex:1', onclick: () => { closeSheet(); opts.onConfirm(); } }, opts.confirmLabel)
+    ),
+  ];
+}
+
+/** Bestätigung als Einblendung; Systemdialoge werden bewusst nicht verwendet. */
+export function askConfirm(ctx, opts) {
+  openSheet('confirm', ctx, opts);
+}
+
+const BUILDERS = { smaller, park, audio, script, knowledge, notifications, menu, confirm };

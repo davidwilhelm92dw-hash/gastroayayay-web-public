@@ -11,8 +11,8 @@ import { cardForPhase } from '../content/knowledge.js';
 import * as P from '../platform/platform.js';
 import { createAudio } from './audio.js';
 import { playKnock } from '../ui/sound.js';
-import { toast } from '../ui/dom.js';
-import { renderScreen } from '../ui/screens.js';
+import { toast, formatTime } from '../ui/dom.js';
+import { renderScreen, audioLabel } from '../ui/screens.js';
 import { openSheet, closeSheet, currentSheet } from '../ui/sheets.js';
 
 const DONE_LOCK_MS = 700;
@@ -35,8 +35,12 @@ export function createApp({ store, world, root }) {
     getPosition: () => store.state.podcast.position,
     savePosition: (pos) => store.commit(S.setPodcastPosition(store.state, pos)),
     onChange: (st) => {
+      const prev = view.podcast;
       view.podcast = st;
-      if (currentSheet() === 'audio') refreshSheet();
+      if (currentSheet() === 'audio') {
+        if (prev.playing !== st.playing || prev.available !== st.available || prev.checked !== st.checked) refreshSheet();
+        else updatePlayerProgress(st);
+      }
       renderTopbarOnly();
     },
   });
@@ -114,9 +118,23 @@ export function createApp({ store, world, root }) {
   }
 
   function renderTopbarOnly() {
-    // Topbar enthält den Audiostatus; ein vollständiges Neuzeichnen ist günstig genug,
-    // stört aber Texteingaben. Deshalb nur außerhalb von Eingabebildschirmen.
-    if (view.screen === 'play' || view.screen === 'complete') render();
+    // Nur die Beschriftung des Audio-Knopfs aktualisieren. Ein vollständiges
+    // Neuzeichnen würde den Erledigt-Knopf während eines Tipps austauschen.
+    const chip = root.querySelector('#audio-chip');
+    if (!chip) return;
+    const label = audioLabel(ctx());
+    chip.querySelector('.label').textContent = label;
+    chip.setAttribute('aria-label', `Audio: ${label}`);
+  }
+
+  /** Zeit und Regler im offenen Player aktualisieren, ohne Knöpfe auszutauschen. */
+  function updatePlayerProgress(st) {
+    const player = document.querySelector('.sheet .player');
+    if (!player) return;
+    const range = player.querySelector('input[type="range"]');
+    if (range && document.activeElement !== range) range.value = String(Math.round(st.position));
+    const time = player.querySelector('.time');
+    if (time) time.textContent = formatTime(st.position);
   }
 
   function refreshSheet() {
@@ -257,11 +275,18 @@ export function createApp({ store, world, root }) {
     /* Während der Aufgabe */
     completeCurrent(stepId) {
       const now = Date.now();
-      if (now < doneLockedUntil) return;
+      if (now < doneLockedUntil) {
+        // abgewiesener Tipp: Knopf nach Ablauf der Sperre wieder freigeben
+        setTimeout(() => view.screen === 'play' && render(), doneLockedUntil - now + 20);
+        return;
+      }
       doneLockedUntil = now + DONE_LOCK_MS;
       const before = state();
       const res = S.completeStep(before, stepId, now);
-      if (res.gained === 0 && !res.finished) return;
+      if (res.gained === 0 && !res.finished) {
+        render();
+        return;
+      }
       commit(res.state, { immediate: true });
       feedbackForBuild(res.from, res.to);
       if (state().settings.haptics) P.hapticTap();

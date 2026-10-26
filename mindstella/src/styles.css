@@ -91,6 +91,10 @@ button {
   outline-offset: 2px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -769,6 +773,10 @@ button {
   justify-content: space-between;
   gap: 8px;
   align-items: center;
+}
+
+.knowledge-list button .muted {
+  white-space: nowrap;
 }
 
 .knowledge-list button[disabled] {

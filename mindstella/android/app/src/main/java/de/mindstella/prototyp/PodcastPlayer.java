@@ -36,6 +36,7 @@ final class PodcastPlayer {
         this.ctx = ctx.getApplicationContext();
         this.audioManager = (AudioManager) this.ctx.getSystemService(Context.AUDIO_SERVICE);
         this.listener = listener;
+        this.focusListener = this::onFocusChange;
     }
 
     /** @return Dauer in Sekunden oder -1, wenn die Datei fehlt */
@@ -114,7 +115,9 @@ final class PodcastPlayer {
             .build();
     }
 
-    private final AudioManager.OnAudioFocusChangeListener focusListener = change -> {
+    private final AudioManager.OnAudioFocusChangeListener focusListener;
+
+    private void onFocusChange(int change) {
         synchronized (PodcastPlayer.this) {
             if (!prepared) return;
             switch (change) {
@@ -145,7 +148,7 @@ final class PodcastPlayer {
                     break;
             }
         }
-    };
+    }
 
     private boolean requestFocus() {
         if (audioManager == null) return true;

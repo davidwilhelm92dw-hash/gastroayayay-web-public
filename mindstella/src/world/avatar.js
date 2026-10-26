@@ -322,6 +322,11 @@ export function createAvatar(def) {
     torsoGroup.add(zip);
   }
   for (const side of [-1, 1]) {
+    const shoulderCap = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 10), jacket);
+    shoulderCap.position.set(side * (shoulder + 0.03), 1.4, 0);
+    torsoGroup.add(shoulderCap);
+  }
+  for (const side of [-1, 1]) {
     const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.02), trim);
     pocket.position.set(side * 0.085, 1.27, 0.115);
     torsoGroup.add(pocket);
@@ -397,8 +402,8 @@ export function createAvatar(def) {
   headGroup.add(nose);
   if (def.beard || def.stubble) {
     const beard = new THREE.Mesh(
-      new THREE.SphereGeometry(HEAD_R * 1.01, 20, 8, Math.PI * 0.08, Math.PI * 0.84, Math.PI * 0.66, Math.PI * 0.24),
-      def.beard ? hairMat : std(shade(def.skin, 0.72), { roughness: 0.9 })
+      new THREE.SphereGeometry(HEAD_R * 1.015, 20, 8, Math.PI * 0.12, Math.PI * 0.76, Math.PI * 0.74, Math.PI * 0.2),
+      def.beard ? std(shade(def.hair, 1.35), { roughness: 0.75 }) : std(shade(def.skin, 0.8), { roughness: 0.9 })
     );
     beard.scale.set(0.95, 1.05, 1.02);
     headGroup.add(beard);
@@ -504,6 +509,6 @@ export function animateAvatar(av, mode, t, dt, phase) {
     av.body.position.y += (0 - av.body.position.y) * k;
     lerp(av.head.rotation, 'x', 0);
   }
-  av.arms[0].rotation.z = -0.08;
-  av.arms[1].rotation.z = 0.08;
+  av.arms[0].rotation.z = -0.13;
+  av.arms[1].rotation.z = 0.13;
 }

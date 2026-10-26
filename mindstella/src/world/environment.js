@@ -199,7 +199,7 @@ export function createMountains() {
 /* ---------- Vegetation ---------- */
 
 function inClearing(x, z, pad = 0) {
-  return Math.hypot(x, z - 0.5) < 3.4 + pad || Math.hypot(x - 6.2, z + 1.8) < 3.2 + pad || Math.hypot(x + 0.5, z - 5) < 2.2 + pad;
+  return Math.hypot(x, z - 0.5) < 3.4 + pad || Math.hypot(x - 8.6, z + 4.2) < 3.2 + pad || Math.hypot(x + 0.5, z - 5) < 2.2 + pad || Math.hypot(x - 5.2, z + 0.4) < 1.6 + pad;
 }
 
 export function createGrass({ animated }) {
@@ -516,7 +516,7 @@ export function createCapsule() {
   }
 
   const merged = mergeByMaterial(g);
-  merged.position.set(6.2, 0, -1.8);
+  merged.position.set(8.6, 0, -4.2);
   merged.rotation.y = -0.3;
   return merged;
 }
@@ -542,7 +542,7 @@ export function createSupplies() {
     g.add(m);
   }
   const merged = mergeByMaterial(g);
-  merged.position.set(4.3, 0, 0.9);
+  merged.position.set(5.2, 0, -0.4);
   merged.rotation.y = -0.5;
   return merged;
 }
