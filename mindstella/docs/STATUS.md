@@ -26,11 +26,16 @@ Stand: 26. Oktober 2026, nach dem Ergänzungsauftrag (ein Hauptcharakter, räuml
 
 **Android-Build:** Jeder Push baut eine Debug-APK (Artefakt `mindstella-testfassung`).
 
-**Gerätetest im Emulator** (Android 15, 360 dp breit, echte Touch-Eingaben über adb): Auswertung des aktuellen Laufs steht noch aus; Start und Bauübersicht liefen im vorherigen Lauf durch, die 3D-Welt war in der Aufnahme nicht sichtbar (Ursache wird geprüft).
+**Gerätetest im Emulator** (GitHub Actions, Android 15 mit Chrome-WebView 124, 360 dp breit, Touch-Eingaben über adb; letzter Lauf 40414560251, Commit b00e9e1). Bestätigt sind: Die APK installiert und startet, WebGL steht zur Verfügung, die 3D-Welt wird gerendert (Pixelprobe mit Himmel- und Wiesenfarben, 225 Draw-Calls; auf dem adb-Bildschirmfoto sind Himmel, Berge, Bäume, Figur und Bauplan zu sehen), echte Tipps kommen in der WebView an (gemessener Versatz 48 px durch die Statusleiste), die Bauübersicht zeigt acht Abschnitte, die Raumauswahl öffnet sich per Antippen, und ein Raum öffnet seine Tätigkeitsliste.
+
+Nicht zu Ende geführt ist der Emulatorlauf ab der Tätigkeitsauswahl. Der Emulator hat auf dem Runner keine Grafikkarte und berechnet die Szene auf dem Prozessor; gemessen wurden 0,9 bis 1,6 Bilder pro Sekunde. Tipps kamen dadurch erst beim zweiten oder dritten Versuch an, und der Ablauf überschritt die Wartezeiten. Die Rückkehrhilfe (Appwechsel, Displaysperre), die Wiederaufnahme nach dem Beenden und der Bau nach „Erledigt“ sind deshalb im Emulator nicht geprüft; der Bau nach „Erledigt“ ist in der Web-Fassung geprüft. Weitere Läufe würden an dieser Grenze nichts ändern. Die Konsole meldet beim Start „Error injecting safe area CSS“; die Meldung stammt nach meiner Einschätzung aus der Safe-Area-Einbindung von Capacitor, sichtbare Folgen gab es nicht.
+
+Mit `MINDSTELLA_CDP` läuft derselbe Testablauf gegen lokales Chromium (Trockenlauf): 10 von 10 Prüfungen bestanden.
 
 ## Implementiert, aber nicht geprüft
 
-- Darstellung, Bildrate und Akkulast auf echten Handys. Die Szene hat rund 225 Draw-Calls und 196 000 Dreiecke; auf schwächeren Geräten kann das ruckeln.
+- Darstellung, Bildrate und Akkulast auf echten Handys. Die Szene hat rund 225 Draw-Calls und 196 000 Dreiecke. Auf Geräten mit Grafikprozessor ist eine deutlich höhere Bildrate zu erwarten als im Emulator, belegt ist das nicht. Diese Prüfung ist der wichtigste offene Punkt (Testanleitung Nr. 17 bis 19).
+- Rückkehrhilfe, Benachrichtigungen und Wiederaufnahme nach dem Beenden auf Android (Testanleitung Nr. 5 bis 14).
 - Android-Spracherkennung und Sprachausgabe, Öffnen des Spotify-Links in der Spotify-App, Haptik.
 - Native Wiedergabe der Wissensfolge (die Audiodatei fehlt weiterhin).
 
