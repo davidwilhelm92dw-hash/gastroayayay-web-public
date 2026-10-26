@@ -16,15 +16,26 @@ export const KNOWLEDGE_CARDS = [
     sources: ['idhBaulich', 'din68800'],
   },
   {
+    id: 'material',
+    phase: 'material',
+    title: 'Holz sammeln',
+    facts: [
+      'Bevor gebaut wird, liegt das Material griffbereit am Bauplatz. So muss die Arbeit später nicht für jedes Bauteil unterbrochen werden.',
+      'Fürs Bauen soll Holz trocken sein. Lufttrockenes Holz hat nach dem Wood Handbook meist höchstens 20 Prozent Feuchte und gilt damit als ausreichend sicher gegen Pilzbefall.',
+    ],
+    fiction: 'Die Stämme stammen von umgestürzten Bäumen am Waldrand. Wie schnell Holz auf diesem Planeten trocknet, ist noch unbekannt.',
+    sources: ['fplWoodHandbook'],
+  },
+  {
     id: 'unterbau',
     phase: 'unterbau',
-    title: 'Unterbau: Fundamente und Schwellen',
+    title: 'Unterbau: Steinsockel und Schwellen',
     facts: [
-      'Die Hütte steht auf einzelnen Punktfundamenten. Sie tragen die Last in den Boden und halten das Holz vom feuchten Erdreich fern.',
+      'Die Hütte steht auf einem niedrigen Sockel aus Natursteinen. Er trägt die Last in den Boden und hält das Holz vom feuchten Erdreich fern.',
       'Als Schutz vor Spritzwasser nennen Fachpublikationen zur DIN 68800-2 einen Abstand von 30 Zentimetern zwischen Holzunterkante und Gelände. Bremst eine grobe Kiesschüttung das Spritzwasser, kann der Abstand auf 15 Zentimeter sinken.',
-      'Auf den Fundamenten liegen die Schwellen und Bodenbalken. Sie verteilen die Last und bilden den Rahmen für den Boden.',
+      'Auf dem Sockel liegen die Schwellen und Bodenbalken. Sie verteilen die Last und bilden den Rahmen für den Boden.',
     ],
-    fiction: 'Die Fundamente sind aus Gestein der Wiese gesetzt. Wie tief der Boden dieses Planeten im Winter gefriert, weiß noch niemand.',
+    fiction: 'Die Steine stammen von der Wiese rund um den Bauplatz. Wie tief der Boden dieses Planeten im Winter gefriert, weiß noch niemand.',
     sources: ['bdfSockel', 'din68800'],
   },
   {

@@ -4,28 +4,28 @@
  */
 import { h, icon, toast } from './dom.js';
 import { logoMarkup } from './logo.js';
-import { AVATARS } from '../world/avatar.js';
+import { ROOMS, roomById, activitiesForDisplay } from '../domain/rooms.js';
 import { PHASES, reachedPhases } from '../world/hutPlan.js';
 import { currentStep, stepPosition, MAX_INITIAL_STEPS } from '../domain/state.js';
 import { EPISODE } from '../content/podcast.js';
 
 export function renderScreen(root, screen, ctx) {
-  const builders = { welcome, avatar, intro, capture, edit, audio, play, complete };
+  const builders = { welcome, intro, capture, rooms, activities, edit, audio, play, complete };
   const build = builders[screen];
   root.replaceChildren(...(build ? [build(ctx)].flat() : []));
 }
 
 /* ---------- Gemeinsame Teile ---------- */
 
-function topbar(ctx, { showAudio = true } = {}) {
+function topbar(ctx, { showAudio = true, compact = false } = {}) {
   const { state, actions } = ctx;
   const built = state.world.elementsBuilt;
   const pct = Math.round((built / state.world.totalElements) * 100);
   return h(
     'header',
-    { class: 'topbar' },
-    h('div', { html: logoMarkup({ size: 'small' }), style: 'margin-right:auto' }),
-    h('span', { class: 'status-pill', 'aria-label': `Hütte zu ${pct} Prozent gebaut` }, `Hütte ${pct} %`),
+    { class: 'topbar', 'data-frame-top': '' },
+    compact ? h('span', { style: 'margin-right:auto' }) : h('div', { html: logoMarkup({ size: 'small' }), style: 'margin-right:auto' }),
+    compact ? null : h('span', { class: 'status-pill', 'aria-label': `Hütte zu ${pct} Prozent gebaut` }, `Hütte ${pct} %`),
     showAudio
       ? h('button', { class: 'chip', id: 'audio-chip', onclick: () => actions.openSheet('audio'), 'aria-label': `Audio: ${audioLabel(ctx)}` }, icon('audio'), h('span', { class: 'label' }, audioLabel(ctx)))
       : null,
@@ -51,40 +51,9 @@ function welcome({ actions }) {
       h('div', { html: logoMarkup() }),
       h('p', { style: 'max-width:22rem;margin:0 0 6px;font-size:1.1rem' }, 'Erledige echte Aufgaben. Jeder Schritt baut an einer neuen Heimat auf einem fremden Planeten.'),
       h('p', { style: 'opacity:.75;margin:0 0 28px;font-size:.92rem' }, 'Prototyp · Kapitel 1'),
-      h('button', { class: 'btn btn--primary', style: 'min-width:240px', onclick: actions.beginAvatarChoice }, 'Figur wählen')
+      h('button', { class: 'btn btn--primary', style: 'min-width:240px', onclick: actions.beginChapter }, 'Kapitel 1 beginnen')
     ),
   ];
-}
-
-/* ---------- Figurenwahl ---------- */
-
-function avatar({ view, actions }) {
-  const def = AVATARS[view.avatarIndex];
-  let startX = null;
-  const card = h(
-    'section',
-    { class: 'card', 'aria-label': 'Figur wählen' },
-    h('p', { class: 'eyebrow' }, `Figur ${view.avatarIndex + 1} von ${AVATARS.length}`),
-    h(
-      'div',
-      { class: 'avatar-nav' },
-      h('button', { class: 'icon-btn', onclick: () => actions.browseAvatar(-1), 'aria-label': 'Vorherige Figur' }, icon('left')),
-      h('div', { class: 'name', 'aria-live': 'polite' }, h('strong', {}, def.name), h('span', { class: 'muted' }, def.line)),
-      h('button', { class: 'icon-btn', onclick: () => actions.browseAvatar(1), 'aria-label': 'Nächste Figur' }, icon('right'))
-    ),
-    h('div', { class: 'dots', 'aria-hidden': 'true' }, AVATARS.map((_, i) => h('span', { class: i === view.avatarIndex ? 'on' : '' }))),
-    h('button', { class: 'btn btn--primary btn--block', onclick: actions.confirmAvatar }, `${def.name} wählen`)
-  );
-  const main = h('main', { class: 'screen' }, h('div', { class: 'spacer' }), card);
-  // Wischen über die Welt wechselt die Figur
-  main.addEventListener('pointerdown', (e) => (startX = e.clientX));
-  main.addEventListener('pointerup', (e) => {
-    if (startX === null) return;
-    const dx = e.clientX - startX;
-    startX = null;
-    if (Math.abs(dx) > 50 && !e.target.closest('button')) actions.browseAvatar(dx < 0 ? 1 : -1);
-  });
-  return main;
 }
 
 /* ---------- Einführung und Bauplan ---------- */
@@ -93,22 +62,21 @@ function intro({ actions }) {
   return h(
     'main',
     { class: 'screen' },
-    h('div', { class: 'row', style: 'justify-content:flex-end' }, h('button', { class: 'chip', onclick: actions.finishIntro }, 'Überspringen')),
+    h('div', { class: 'row', style: 'justify-content:flex-end', 'data-frame-top': '' }, h('button', { class: 'chip', onclick: actions.finishIntro }, 'Überspringen')),
     h('div', { class: 'spacer' }),
     h(
       'section',
-      { class: 'card scroll', style: 'max-height:58vh' },
+      { class: 'card scroll', style: 'max-height:56vh', 'data-frame-bottom': '' },
       h('p', { class: 'eyebrow' }, 'Kapitel 1 · Ein Dach unter fremden Monden'),
-      h('p', {}, 'Nach einer Kollision im Orbit hat deine Landekapsel diese Wiese erreicht – unsanft, aber du bist unverletzt. Der Funkkontakt zum Expeditionsteam ist abgerissen. Nur hinter dem Gebirge empfängt das Notfunkgerät manchmal ein rätselhaftes Signal.'),
-      h('p', {}, 'Bevor du ihm folgen kannst, brauchst du das Nötigste. Vor dir liegt eine fremde Welt. Dein erster Schritt ist ein Ort, an den du zurückkehren kannst. Errichte hier deine erste Hütte.'),
-      h('h2', {}, 'Der Bauplan'),
+      h('p', {}, 'Nach einer Kollision im Orbit ist deine Landekapsel hier notgelandet. Der Funkkontakt zum Expeditionsteam ist abgerissen; nur hinter dem Gebirge empfängt das Funkgerät manchmal ein rätselhaftes Signal. Zuerst brauchst du einen Ort, an den du zurückkehren kannst.'),
+      h('h2', {}, 'So entsteht die Hütte'),
       h(
         'ol',
-        { class: 'phase-list' },
-        PHASES.map((p) => h('li', {}, h('strong', {}, p.label), p.short))
+        { class: 'phase-steps' },
+        PHASES.map((p) => h('li', {}, h('strong', {}, p.label), h('span', {}, p.short)))
       ),
-      h('p', { class: 'muted' }, 'Du verknüpfst gleich eine echte Aufgabe mit diesem Bau. Jeder erledigte Schritt fügt Bauteile hinzu; mit dem letzten Schritt steht die Hütte.'),
-      h('button', { class: 'btn btn--primary btn--block', onclick: actions.finishIntro }, 'Aufgabe verknüpfen')
+      h('p', { class: 'notice notice--info' }, 'Du verknüpfst gleich eine echte Aufgabe mit diesem Bau. Jeder Schritt, den du im Alltag abhakst, bringt den Bau ein Stück weiter – egal, ob deine Aufgabe drei oder fünfzehn Schritte hat. Mit dem letzten Schritt steht die Hütte.'),
+      h('button', { class: 'btn btn--primary btn--block', onclick: actions.finishIntro }, 'Aufgabe auswählen')
     )
   );
 }
@@ -120,20 +88,14 @@ function capture(ctx) {
   const textarea = h('textarea', {
     class: 'textarea',
     id: 'task-text',
-    rows: 3,
+    rows: 2,
     maxlength: 600,
-    placeholder: 'z. B. Küche aufräumen: Geschirr wegräumen, Arbeitsfläche wischen',
+    placeholder: 'z. B. Steuerordner sortieren: Belege sammeln, Ordner beschriften',
     'aria-describedby': 'task-help',
   });
-  const thread = h('input', {
-    class: 'input',
-    id: 'thread-text',
-    maxlength: 140,
-    placeholder: 'z. B. Serie bei Folge 4, Minute 12',
-  });
+  const thread = h('input', { class: 'input', id: 'thread-text', maxlength: 140, placeholder: 'z. B. Serie bei Folge 4, Minute 12' });
   const micStatus = h('p', { class: 'muted', 'aria-live': 'polite', style: 'margin:6px 0 0' });
   const micBtn = h('button', { class: 'btn btn--secondary', type: 'button' }, icon('mic'), 'Einsprechen');
-
   micBtn.addEventListener('click', () =>
     startDictation(ctx, micStatus, (text) => {
       textarea.value = text;
@@ -148,29 +110,108 @@ function capture(ctx) {
     h('div', { class: 'spacer' }),
     h(
       'section',
-      { class: 'card scroll', style: 'max-height:78vh' },
+      { class: 'card scroll', style: 'max-height:82vh', 'data-frame-bottom': '' },
       h('p', { class: 'eyebrow' }, 'Echte Aufgabe'),
       h('h1', {}, 'Was erledigst du jetzt?'),
-      h('p', { id: 'task-help', class: 'muted' }, 'Jeder erledigte Schritt baut ein Stück der Hütte. Ist die Aufgabe fertig, steht die Hütte – egal, wie viele Schritte es sind.'),
+      h('p', { id: 'task-help', class: 'muted' }, 'Jeder erledigte Schritt baut an der Hütte. Ist die Aufgabe fertig, steht sie.'),
+      h(
+        'button',
+        { class: 'option-tile', id: 'open-rooms', onclick: actions.openRooms },
+        h('span', { class: 'option-icon', html: ROOM_ICONS.haus }),
+        h('span', {}, h('strong', {}, 'Hausarbeit auswählen'), h('span', { class: 'desc' }, 'Raum wählen, Tätigkeiten antippen')),
+        icon('right')
+      ),
+      h('p', { class: 'divider-label' }, 'oder eigene Aufgabe'),
       h('div', { class: 'field' }, h('label', { for: 'task-text' }, 'Aufgabe, gern mit Schritten'), textarea),
       h('div', { class: 'row', style: 'margin-top:8px' }, micBtn),
       micStatus,
       h(
         'details',
-        { style: 'margin:14px 0 4px' },
+        { style: 'margin:10px 0 4px' },
         h('summary', { style: 'cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center' }, 'Faden sichern (optional)'),
-        h('div', { class: 'field', style: 'margin-top:6px' }, h('label', { for: 'thread-text' }, 'Wobei warst du gerade?'), thread, h('p', { class: 'muted', style: 'margin-top:6px' }, 'Wird beim Abschluss wieder angezeigt, damit du zurückfindest.'))
+        h('div', { class: 'field', style: 'margin-top:6px' }, h('label', { for: 'thread-text' }, 'Wobei warst du gerade?'), thread, h('p', { class: 'muted', style: 'margin-top:6px' }, 'Wird beim Abschluss wieder angezeigt.'))
       ),
-      h(
-        'button',
-        {
-          class: 'btn btn--primary btn--block',
-          style: 'margin-top:12px',
-          onclick: () => actions.submitCapture({ text: textarea.value, thread: thread.value }),
-        },
-        'Weiter'
-      ),
+      h('button', { class: 'btn btn--primary btn--block', style: 'margin-top:10px', onclick: () => actions.submitCapture({ text: textarea.value, thread: thread.value }) }, 'Weiter mit eigener Aufgabe'),
       state.routines.length ? h('p', { class: 'muted', style: 'margin:10px 0 0' }, `Gespeicherte Abläufe: ${state.routines.map((r) => r.title).join(', ')}`) : null
+    )
+  );
+}
+
+/* ---------- Räume und Tätigkeiten ---------- */
+
+const svg = (d) => `<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+export const ROOM_ICONS = {
+  haus: svg('<path d="M5 15 16 6l11 9"/><path d="M8 13v13h16V13"/><path d="M14 26v-7h4v7"/>'),
+  kueche: svg('<rect x="6" y="5" width="20" height="22" rx="2"/><path d="M6 13h20"/><circle cx="11" cy="9" r="1.2"/><circle cx="16" cy="9" r="1.2"/><path d="M10 18v5M22 18v5"/>'),
+  bad: svg('<path d="M5 16h22v3a6 6 0 0 1-6 6H11a6 6 0 0 1-6-6z"/><path d="M8 16V8a3 3 0 0 1 6 0"/><path d="M10 25l-1 2M22 25l1 2"/>'),
+  wohnzimmer: svg('<path d="M6 17v-4a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v4"/><path d="M4 17a2 2 0 0 1 4 0v3h16v-3a2 2 0 0 1 4 0v6H4z"/><path d="M7 23v3M25 23v3"/>'),
+  schlafzimmer: svg('<path d="M4 24V9"/><path d="M4 19h24v5"/><path d="M4 15h8a3 3 0 0 1 3 3v1"/><path d="M15 15h10a3 3 0 0 1 3 3v1"/>'),
+  flur: svg('<rect x="9" y="4" width="14" height="24" rx="1.5"/><circle cx="19" cy="16" r="1.2"/><path d="M5 28h22"/>'),
+  waesche: svg('<rect x="6" y="4" width="20" height="24" rx="2.5"/><circle cx="16" cy="17" r="6"/><path d="M10 8h2M15 8h7"/><path d="M12.5 18c2 1.5 5 1.5 7 0"/>'),
+};
+
+function rooms(ctx) {
+  const { actions } = ctx;
+  return h(
+    'main',
+    { class: 'screen' },
+    topbar(ctx, { showAudio: false }),
+    h('div', { class: 'spacer' }),
+    h(
+      'section',
+      { class: 'card scroll', style: 'max-height:82vh', 'data-frame-bottom': '' },
+      h('p', { class: 'eyebrow' }, 'Hausarbeit'),
+      h('h1', {}, 'Welcher Raum?'),
+      h(
+        'div',
+        { class: 'room-grid', role: 'list' },
+        ROOMS.map((r) =>
+          h(
+            'button',
+            { class: 'room-tile', role: 'listitem', 'data-room': r.id, onclick: () => actions.chooseRoom(r.id) },
+            h('span', { class: 'room-icon', html: ROOM_ICONS[r.icon] }),
+            h('strong', {}, r.name),
+            h('span', { class: 'desc' }, `${r.activities.length} Tätigkeiten`)
+          )
+        )
+      ),
+      h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'btn btn--ghost', onclick: actions.backToCapture }, 'Zurück'))
+    )
+  );
+}
+
+function activities(ctx) {
+  const { view, actions } = ctx;
+  const room = roomById(view.room);
+  const { oft, selten } = activitiesForDisplay(room);
+  const selected = new Set(view.selection);
+  const count = selected.size;
+  const row = (a) =>
+    h(
+      'button',
+      { class: 'activity', role: 'checkbox', 'aria-checked': String(selected.has(a.id)), 'data-activity': a.id, onclick: () => actions.toggleActivity(a.id) },
+      h('span', { class: 'check', 'aria-hidden': 'true' }),
+      h('span', { class: 'activity-text' }, a.text)
+    );
+  return h(
+    'main',
+    { class: 'screen' },
+    topbar(ctx, { showAudio: false }),
+    h('div', { class: 'spacer' }),
+    h(
+      'section',
+      { class: 'card scroll', style: 'max-height:84vh', 'data-frame-bottom': '' },
+      h('p', { class: 'eyebrow' }, `Hausarbeit · ${room.name}`),
+      h('h1', {}, 'Was gehört dazu?'),
+      h('p', { class: 'muted' }, 'Tippe an, was du erledigen willst. Die Reihenfolge ergibt sich danach von selbst.'),
+      h('div', { class: 'activity-group', role: 'group', 'aria-label': 'Häufig' }, h('p', { class: 'group-label' }, 'Häufig'), oft.map(row)),
+      h('div', { class: 'activity-group', role: 'group', 'aria-label': 'Seltener' }, h('p', { class: 'group-label' }, 'Seltener'), selten.map(row)),
+      h(
+        'div',
+        { class: 'row', style: 'margin-top:12px' },
+        h('button', { class: 'btn btn--ghost', onclick: actions.openRooms }, 'Räume'),
+        h('button', { class: 'btn btn--primary', style: 'flex:1', id: 'activities-next', disabled: count === 0, onclick: actions.submitActivities }, count ? `Weiter mit ${count} ${count === 1 ? 'Schritt' : 'Schritten'}` : 'Tätigkeit wählen')
+      )
     )
   );
 }
@@ -303,7 +344,7 @@ function edit(ctx) {
     h('div', { class: 'spacer', style: 'min-height:8px' }),
     h(
       'section',
-      { class: 'card scroll', style: 'max-height:84vh' },
+      { class: 'card scroll', style: 'max-height:84vh', 'data-frame-bottom': '' },
       h('p', { class: 'eyebrow' }, 'Vor dem Start bearbeiten'),
       banner,
       h('div', { class: 'field' }, h('label', { for: 'draft-title' }, 'Hauptaufgabe'), titleInput),
@@ -386,7 +427,7 @@ function audio(ctx) {
     h('div', { class: 'spacer' }),
     h(
       'section',
-      { class: 'card scroll', style: 'max-height:84vh' },
+      { class: 'card scroll', style: 'max-height:84vh', 'data-frame-bottom': '' },
       h('p', { class: 'eyebrow' }, 'Freiwillig'),
       h('h1', {}, 'Was möchtest du nebenbei hören?'),
       group,
@@ -440,33 +481,35 @@ function play(ctx) {
     'Erledigt'
   );
 
-  const hint = view.knowledgeHint
-    ? h('button', { class: 'chip chip--light knowledge-hint', onclick: () => actions.openSheet('knowledge', { focus: view.knowledgeHint.phase }) }, icon('book'), `Wissen: ${view.knowledgeHint.label}`)
-    : h('button', { class: 'chip knowledge-hint', onclick: () => actions.openSheet('knowledge') }, icon('book'), 'Wissen');
+  const knowledgeBtn = view.knowledgeHint
+    ? h('button', { class: 'link-chip link-chip--new', 'aria-label': `Neue Wissenskarte: ${view.knowledgeHint.label}`, onclick: () => actions.openSheet('knowledge', { focus: view.knowledgeHint.phase }) }, icon('book'), 'Neu')
+    : h('button', { class: 'link-chip', onclick: () => actions.openSheet('knowledge') }, icon('book'), 'Wissen');
 
   const card = h(
     'section',
-    { class: 'card task-card', 'aria-live': 'polite' },
-    h('p', { class: 'task-title' }, t.title),
+    { class: 'card task-card', 'aria-live': 'polite', 'data-frame-bottom': '' },
+    h('div', { class: 'task-head' }, h('p', { class: 'task-title' }, t.title), knowledgeBtn),
     paused ? h('span', { class: 'paused-badge' }, 'Pausiert') : null,
-    step.partOf ? h('p', { class: 'muted', style: 'margin:0 0 2px' }, `Teil von: ${step.partOf}`) : null,
+    step.partOf ? h('p', { class: 'muted', style: 'margin:0 0 2px;font-size:.85rem' }, `Teil von: ${step.partOf}`) : null,
     h('p', { class: 'step-text' }, step.text),
-    h('div', { class: 'step-meta' }, h('span', {}, `Schritt ${pos.index} von ${pos.count}`), t.thread ? h('span', {}, 'Faden gesichert') : null),
-    h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(pct), 'aria-label': 'Baufortschritt der Hütte' }, h('span', { style: `width:${pct}%` })),
+    h(
+      'div',
+      { class: 'step-meta' },
+      h('span', {}, `Schritt ${pos.index} von ${pos.count}`),
+      h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(pct), 'aria-label': 'Baufortschritt der Hütte' }, h('span', { style: `width:${pct}%` }))
+    ),
     h('p', { class: 'feedback', role: 'status' }, view.feedback),
-    paused
-      ? h('button', { class: 'btn btn--primary btn--block btn--done', onclick: actions.resume }, icon('play'), 'Fortsetzen')
-      : doneBtn,
+    paused ? h('button', { class: 'btn btn--primary btn--block btn--done', onclick: actions.resume }, icon('play'), 'Fortsetzen') : doneBtn,
     h(
       'div',
       { class: 'helpers' },
-      h('button', { class: 'btn btn--secondary', onclick: paused ? actions.resume : actions.pause, disabled: false }, icon(paused ? 'play' : 'pause'), paused ? 'Weiter' : 'Pause'),
-      h('button', { class: 'btn btn--secondary', onclick: () => actions.openSheet('smaller'), disabled: paused }, icon('smaller'), 'Kleiner machen'),
-      h('button', { class: 'btn btn--secondary', onclick: () => actions.openSheet('park') }, icon('park'), 'Gedanke parken')
+      h('button', { class: 'btn btn--secondary', onclick: paused ? actions.resume : actions.pause }, icon(paused ? 'play' : 'pause'), paused ? 'Weiter' : 'Pause'),
+      h('button', { class: 'btn btn--secondary', 'aria-label': 'Schritt kleiner machen', onclick: () => actions.openSheet('smaller'), disabled: paused }, icon('smaller'), 'Kleiner'),
+      h('button', { class: 'btn btn--secondary', 'aria-label': 'Gedanke parken', onclick: () => actions.openSheet('park') }, icon('park'), 'Parken')
     )
   );
 
-  return h('main', { class: 'screen' }, topbar(ctx), h('div', { class: 'spacer' }), hint, card);
+  return h('main', { class: 'screen' }, topbar(ctx, { compact: true }), h('div', { class: 'spacer' }), card);
 }
 
 /* ---------- Kapitelabschluss ---------- */
@@ -474,18 +517,18 @@ function play(ctx) {
 function complete(ctx) {
   const { state, view, actions } = ctx;
   if (!view.completionShown) {
-    return h('main', { class: 'screen' }, topbar(ctx, { showAudio: false }), h('div', { class: 'spacer' }), h('p', { class: 'status-pill', style: 'align-self:center', role: 'status' }, 'Die Hütte wird fertig …'));
+    return h('main', { class: 'screen' }, topbar(ctx, { showAudio: false, compact: true }), h('div', { class: 'spacer' }), h('p', { class: 'status-pill', style: 'align-self:center', role: 'status', 'data-frame-bottom': '' }, 'Die Hütte wird fertig …'));
   }
   const thread = state.task?.thread;
   const phases = reachedPhases(state.world.elementsBuilt);
   return h(
     'main',
     { class: 'screen' },
-    topbar(ctx),
+    topbar(ctx, { compact: true }),
     h('div', { class: 'spacer' }),
     h(
       'section',
-      { class: 'card scroll', style: 'max-height:62vh' },
+      { class: 'card scroll', style: 'max-height:48vh', 'data-frame-bottom': '' },
       h('p', { class: 'eyebrow' }, 'Kapitel 1 abgeschlossen'),
       h('h1', {}, 'Die Hütte steht.'),
       h('p', {}, h('strong', {}, 'Erledigt: '), state.world.completedTaskTitle || 'deine Aufgabe'),

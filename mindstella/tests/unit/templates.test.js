@@ -24,7 +24,7 @@ test('nur Titel ergibt keine Schritte', () => {
 test('Vorlagen werden regelbasiert erkannt, unbekannte nicht', () => {
   assert.equal(findTemplate('ich muss die Wäsche machen').id, 'waesche');
   assert.equal(findTemplate('Küche aufräumen').id, 'kueche');
-  assert.equal(findTemplate('gleich die Wohnung verlassen').id, 'verlassen');
+  assert.equal(findTemplate('Bad putzen').id, 'bad');
   assert.equal(findTemplate('Steuererklärung'), null);
 });
 

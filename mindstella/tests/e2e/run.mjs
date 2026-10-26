@@ -32,8 +32,9 @@ function check(name, ok, detail = '') {
 
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 
-async function newPage({ fakeSpeech = false, audioFixture = null } = {}) {
-  const context = await browser.newContext({ viewport: { width: 360, height: 760 }, deviceScaleFactor: 2, locale: 'de-DE' });
+async function newPage({ fakeSpeech = false, audioFixture = null, width = 360, height = 740 } = {}) {
+  // schmales Android-Format mit Touch-Eingabe
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'de-DE' });
   await context.addInitScript(
     ({ fakeSpeech }) => {
       window.__opened = [];
@@ -96,11 +97,11 @@ async function newPage({ fakeSpeech = false, audioFixture = null } = {}) {
 const S = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__mindstella.store.state)));
 const idle = (page) => page.waitForFunction(() => !window.__mindstella.world.busy, null, { timeout: 90000 });
 const shot = (page, name) => page.screenshot({ path: path.join(SHOTS, `${name}.png`) });
-const tap = (page, text) => page.getByRole('button', { name: text, exact: true }).first().click();
+const tap = (page, text) => page.getByRole('button', { name: text, exact: true }).first().tap();
 
 async function setupTask(page, { text, editSteps = null, applySuggestion = null, audio = 'Ohne Audio', screenshots = false }) {
   await page.fill('#task-text', text);
-  await tap(page, 'Weiter');
+  await tap(page, 'Weiter mit eigener Aufgabe');
   if (screenshots) await shot(page, '05-bearbeiten');
   if (applySuggestion) await tap(page, applySuggestion);
   if (editSteps) {
@@ -124,7 +125,7 @@ async function completeAll(page, { waitIdle = true } = {}) {
   let guard = 0;
   while ((await page.locator('.task-card').count()) > 0 && guard++ < 60) {
     const before = (await S(page)).world.elementsBuilt;
-    await page.locator('.btn--done').click();
+    await page.locator('.btn--done').tap();
     await page.waitForFunction((b) => window.__mindstella.store.state.world.elementsBuilt > b, before);
     if (waitIdle) await idle(page);
     await page.waitForTimeout(750); // Sperre gegen Doppeltipps
@@ -136,18 +137,11 @@ if (want('ablauf')) {
   const { page, context, errors } = await newPage();
   await page.waitForTimeout(1500);
   await shot(page, '01-willkommen');
-  await tap(page, 'Figur wählen');
-  await page.waitForTimeout(1200);
-  for (let i = 0; i < 5; i++) {
-    await shot(page, `02-figur-${i + 1}`);
-    await page.getByRole('button', { name: 'Nächste Figur' }).click();
-    await page.waitForTimeout(900);
-  }
-  await page.getByRole('button', { name: /wählen$/ }).click();
+  await tap(page, 'Kapitel 1 beginnen');
   await page.waitForTimeout(1500);
-  await shot(page, '03-einfuehrung');
-  check('Einführung zeigt Bauplan mit 7 Abschnitten', (await page.locator('.phase-list li').count()) === 7);
-  await tap(page, 'Aufgabe verknüpfen');
+  await shot(page, '03-bauuebersicht');
+  check('Bauübersicht zeigt 8 Abschnitte, beginnend mit Holz sammeln', (await page.locator('.phase-steps li').count()) === 8 && /Holz sammeln/.test(await page.locator('.phase-steps li').first().innerText()));
+  await tap(page, 'Aufgabe auswählen');
   await shot(page, '04-erfassen');
 
   await setupTask(page, {
@@ -221,7 +215,7 @@ if (want('ablauf')) {
   st = await S(page);
   check('Verkleinern erhält den sichtbaren Bau', st.world.elementsBuilt === builtBeforeSplit);
   check('Verkleinern erhöht die Zahl offener Schritte', st.task.steps.filter((s) => !s.done).length > openBefore);
-  check('Gesamtzahl der Bauteile bleibt gleich', st.world.totalElements === 74);
+  check('Gesamtzahl der Bauteile bleibt gleich', st.world.totalElements === 82);
 
   // Wissenskarte öffnen und schließen ohne Änderung
   const snapshot = JSON.stringify((await S(page)).task);
@@ -254,7 +248,7 @@ if (want('ablauf')) {
   await page.reload();
   await page.waitForTimeout(2000);
   st = await S(page);
-  check('Ergebnis bleibt nach Neustart unverändert', st.world.completed && st.world.elementsBuilt === 74 && (await page.locator('h1').innerText()) === 'Die Hütte steht.');
+  check('Ergebnis bleibt nach Neustart unverändert', st.world.completed && st.world.elementsBuilt === 82 && (await page.locator('h1').innerText()) === 'Die Hütte steht.');
   await shot(page, '15-abschluss-nach-neustart');
 
   // Menü und Test-Neustart
@@ -265,7 +259,7 @@ if (want('ablauf')) {
   await tap(page, 'Zurücksetzen');
   await page.waitForTimeout(800);
   st = await S(page);
-  check('Test-Neustart setzt Kapitel zurück und behält die Figur', st.world.elementsBuilt === 0 && !st.world.completed && st.profile.avatarId && st.parked.length === 1);
+  check('Test-Neustart setzt Kapitel zurück, Einstellungen und Gedanken bleiben', st.world.elementsBuilt === 0 && !st.world.completed && st.profile.welcomed && st.parked.length === 1);
   check('Fehlerfreie Konsole (Ablauf 1)', errors.length === 0, errors.join(' / '));
   await context.close();
 }
@@ -275,7 +269,7 @@ async function runList(label, steps) {
   const { page, context, errors } = await newPage();
   await page.evaluate(() => {
     const s = window.__mindstella.store.state;
-    s.profile.avatarId = 'navigation';
+    s.profile.welcomed = true;
     s.profile.introSeen = true;
     s.settings.reducedMotion = true;
   });
@@ -288,7 +282,7 @@ async function runList(label, steps) {
   await completeAll(page, { waitIdle: false });
   await page.waitForFunction(() => window.__mindstella.store.state.world.completed);
   const st = await S(page);
-  check(`${label}: genau eine vollständige Hütte`, st.world.elementsBuilt === 74 && st.world.completed);
+  check(`${label}: genau eine vollständige Hütte`, st.world.elementsBuilt === st.world.totalElements && st.world.completed);
   check(`Fehlerfreie Konsole (${label})`, errors.length === 0, errors.join(' / '));
   return { page, context };
 }
@@ -307,7 +301,7 @@ if (want('unbekannt')) {
   const { page, context } = await newPage();
   await page.evaluate(() => {
     const s = window.__mindstella.store.state;
-    s.profile.avatarId = 'forscher';
+    s.profile.welcomed = true;
     s.profile.introSeen = true;
   });
   await page.evaluate(() => window.__mindstella.store.commit({ ...window.__mindstella.store.state }, { immediate: true }));
@@ -325,7 +319,7 @@ if (want('unbekannt')) {
     check('Ohne Spracherkennung bleibt die Texteingabe nutzbar', /Texteingabe/.test(statusText) && (await page.locator('#task-text').isEditable()), statusText);
   }
   await page.fill('#task-text', 'Fahrrad reparieren');
-  await tap(page, 'Weiter');
+  await tap(page, 'Weiter mit eigener Aufgabe');
   const banner = await page.locator('.notice').first().innerText();
   check('Unbekannte Aufgabe: App fragt nach eigenen Schritten statt zu raten', /keine Vorlage/.test(banner) && (await page.locator('.step-item').count()) === 0, banner);
   await tap(page, 'Weiter');
@@ -339,13 +333,13 @@ if (want('audio')) {
   const { page, context } = await newPage();
   await page.evaluate(() => {
     const s = window.__mindstella.store.state;
-    s.profile.avatarId = 'abenteurer';
+    s.profile.welcomed = true;
     s.profile.introSeen = true;
   });
   await page.evaluate(() => window.__mindstella.store.commit({ ...window.__mindstella.store.state }, { immediate: true }));
   await page.reload();
   await page.fill('#task-text', 'Wäsche erledigen');
-  await tap(page, 'Weiter');
+  await tap(page, 'Weiter mit eigener Aufgabe');
   await tap(page, 'Vorschlag übernehmen');
   await tap(page, 'Weiter');
   await page.waitForTimeout(300);
@@ -379,15 +373,15 @@ if (fixture && want('audio')) {
   const { page, context, errors } = await newPage({ fakeSpeech: true, audioFixture: fixture });
   await page.evaluate(() => {
     const s = window.__mindstella.store.state;
-    s.profile.avatarId = 'forscherin';
+    s.profile.welcomed = true;
     s.profile.introSeen = true;
     s.settings.voiceGuide = true;
     s.settings.spotifyUrl = 'https://open.spotify.com/playlist/37i9dQZF1DX8Uebhn9wzrS';
   });
   await page.evaluate(() => window.__mindstella.store.commit({ ...window.__mindstella.store.state }, { immediate: true }));
   await page.reload();
-  await page.fill('#task-text', 'Wohnung verlassen');
-  await tap(page, 'Weiter');
+  await page.fill('#task-text', 'Küche aufräumen');
+  await tap(page, 'Weiter mit eigener Aufgabe');
   await tap(page, 'Vorschlag übernehmen');
   await tap(page, 'Weiter');
   await page.getByRole('radio', { name: /Wissen zum Kapitel/ }).click();
@@ -452,6 +446,122 @@ if (fixture && want('audio')) {
   await context.close();
 } else if (want('audio')) {
   check('Wiedergabetest übersprungen (ffmpeg fehlt)', true);
+}
+
+/* ========== 5. Raum- und Tätigkeitsauswahl per Touch ========== */
+async function prepared(width, height) {
+  const r = await newPage({ width, height });
+  await r.page.evaluate(() => {
+    const s = window.__mindstella.store.state;
+    s.profile.welcomed = true;
+    s.profile.introSeen = true;
+  });
+  await r.page.evaluate(() => window.__mindstella.store.commit({ ...window.__mindstella.store.state }, { immediate: true }));
+  await r.page.reload();
+  await r.page.waitForSelector('#open-rooms');
+  return r;
+}
+
+if (want('raeume')) {
+  const { page, context, errors } = await prepared(360, 740);
+  await page.locator('#open-rooms').tap();
+  const tiles = await page.locator('[data-room]').evaluateAll((els) => els.map((e) => e.dataset.room));
+  check('Raumauswahl zeigt sechs antippbare Räume', tiles.length === 6, tiles.join(', '));
+  await shot(page, '20-raeume');
+  let roomsOk = 0;
+  let activitiesOk = 0;
+  let activitiesTotal = 0;
+  for (const id of tiles) {
+    await page.locator(`[data-room="${id}"]`).tap();
+    const ok = await page.locator('[data-activity]').count();
+    if (ok > 0) roomsOk++;
+    const ids = await page.locator('[data-activity]').evaluateAll((els) => els.map((e) => e.dataset.activity));
+    for (const a of ids) {
+      activitiesTotal++;
+      await page.locator(`[data-activity="${a}"]`).tap();
+      if ((await page.locator(`[data-activity="${a}"]`).getAttribute('aria-checked')) === 'true') activitiesOk++;
+    }
+    const label = await page.locator('#activities-next').innerText();
+    if (id === 'bad') await shot(page, '21-taetigkeiten-bad-alle');
+    if (!label.includes(String(ids.length))) check(`Zähler im Raum ${id} stimmt`, false, label);
+    // alle wieder abwählen
+    for (const a of ids) await page.locator(`[data-activity="${a}"]`).tap();
+    check(`Raum ${id}: Abwählen funktioniert`, (await page.locator('[aria-checked="true"][data-activity]').count()) === 0 && (await page.locator('#activities-next').isDisabled()));
+    await tap(page, 'Räume');
+  }
+  check('Jede Raumkachel reagiert auf Antippen', roomsOk === tiles.length, `${roomsOk}/${tiles.length}`);
+  check('Jede Tätigkeit lässt sich per Antippen auswählen', activitiesOk === activitiesTotal, `${activitiesOk}/${activitiesTotal}`);
+
+  // Bad: Reihenfolge unabhängig von der Antippreihenfolge
+  await page.locator('[data-room="bad"]').tap();
+  const order = await page.locator('[data-activity]').evaluateAll((els) => els.map((e) => e.innerText.trim()));
+  check('Häufige Tätigkeiten stehen oben', order.indexOf('Spiegel putzen') < order.indexOf('Herumliegendes wegräumen'), order.slice(0, 5).join(' | '));
+  for (const a of ['b-toilette', 'b-ablagen', 'b-spiegel']) await page.locator(`[data-activity="${a}"]`).tap();
+  await page.locator('#activities-next').tap();
+  const steps = await page.locator('.step-item input').evaluateAll((els) => els.map((e) => e.value));
+  check('Bad: Spiegel und Flächen vor der Toilette, Toilette zuletzt', steps.join('|') === 'Spiegel putzen|Ablagen abwischen|Toilette reinigen', steps.join(' | '));
+  await shot(page, '22-bearbeiten-bad');
+  await tap(page, 'Zurück');
+
+  // Fernseher auch im Schlafzimmer, Sofakissen im Wohnzimmer
+  await page.locator('#open-rooms').tap();
+  await page.locator('[data-room="schlafzimmer"]').tap();
+  check('Schlafzimmer bietet „Fernseher abstauben“', (await page.locator('[data-activity="s-tv"]').innerText()).includes('Fernseher'));
+  await tap(page, 'Räume');
+  await page.locator('[data-room="wohnzimmer"]').tap();
+  check('Wohnzimmer bietet Fernseher und Sofakissen', (await page.locator('[data-activity="w-tv"]').count()) === 1 && /Sofakissen/.test(await page.locator('[data-activity="w-kissen"]').innerText()));
+  check('Fehlerfreie Konsole (Räume)', errors.length === 0, errors.join(' / '));
+  await context.close();
+}
+
+/* ========== 6. Darstellung auf schmalen Bildschirmen ========== */
+function inside(r, view, margin = 0) {
+  return r && !r.behind && r.left >= -margin && r.right <= view.width + margin && r.top >= view.top - margin && r.bottom <= view.bottom + margin;
+}
+
+if (want('layout')) {
+  for (const [w, hgt] of [
+    [360, 740],
+    [320, 568],
+  ]) {
+    const { page, context, errors } = await prepared(w, hgt);
+    await page.locator('#open-rooms').tap();
+    await page.locator('[data-room="wohnzimmer"]').tap();
+    for (const a of ['w-raeumen', 'w-kissen', 'w-tv']) await page.locator(`[data-activity="${a}"]`).tap();
+    await page.locator('#activities-next').tap();
+    await tap(page, 'Weiter');
+    await page.getByRole('radio', { name: /Ohne Audio/ }).tap();
+    await tap(page, 'Aufgabe starten');
+    await page.waitForSelector('.task-card');
+    await page.waitForFunction(() => window.__mindstella.world.cameraSettled, null, { timeout: 60000 });
+    let rects = await page.evaluate(() => window.__mindstella.world.screenRects());
+    const cardTop = await page.locator('.task-card').evaluate((e) => e.getBoundingClientRect().top);
+    check(`${w}×${hgt}: Figur vollständig über der Karte sichtbar`, inside(rects.avatar, rects.view) && rects.avatar.bottom < cardTop, JSON.stringify({ a: rects.avatar, v: rects.view, cardTop }));
+    const avatarH = rects.avatar.bottom - rects.avatar.top;
+    check(`${w}×${hgt}: Figur ausreichend groß (mind. 9 % der Bildhöhe)`, avatarH >= hgt * 0.09, `${Math.round(avatarH)} px, Kamera ${JSON.stringify(await page.evaluate(() => window.__mindstella.world.debugCamera))}`);
+    check(`${w}×${hgt}: Baustelle vollständig über der Karte sichtbar`, inside(rects.site, rects.view) && rects.site.bottom < cardTop, JSON.stringify(rects.site));
+    const moonsOn = rects.moons.filter((m) => !m.behind && m.x > 0 && m.x < w && m.y > 0 && m.y < cardTop).length;
+    check(`${w}×${hgt}: alle drei Monde im Bild`, moonsOn === 3, JSON.stringify(rects.moons.map((m) => [Math.round(m.x), Math.round(m.y)])));
+    const textFits = await page.locator('.task-card .step-text').evaluate((e) => e.scrollWidth <= e.clientWidth + 1);
+    check(`${w}×${hgt}: Schritttext passt in die Karte`, textFits);
+    await shot(page, `30-layout-${w}x${hgt}-start`);
+
+    // Bauanimation nach einem erledigten Schritt
+    const before = (await S(page)).world.elementsBuilt;
+    await page.locator('.btn--done').tap();
+    await page.waitForTimeout(300);
+    const busy = await page.evaluate(() => window.__mindstella.world.busy);
+    check(`${w}×${hgt}: Erledigt startet sichtbare Bauhandlung`, busy && (await S(page)).world.elementsBuilt > before);
+    await idle(page);
+    await page.waitForFunction(() => window.__mindstella.world.cameraSettled, null, { timeout: 60000 });
+    rects = await page.evaluate(() => window.__mindstella.world.screenRects());
+    check(`${w}×${hgt}: Figur nach der Bauhandlung sichtbar`, inside(rects.avatar, rects.view, 4), JSON.stringify(rects.avatar));
+    const visibleParts = await page.evaluate(() => window.__mindstella.world.scene.getObjectByName('hut').children.filter((c) => c.visible).length);
+    check(`${w}×${hgt}: Bauteile sind in der Szene sichtbar`, visibleParts > 0, String(visibleParts));
+    await shot(page, `31-layout-${w}x${hgt}-nach-schritt`);
+    check(`Fehlerfreie Konsole (${w}×${hgt})`, errors.length === 0, errors.join(' / '));
+    await context.close();
+  }
 }
 
 await browser.close();

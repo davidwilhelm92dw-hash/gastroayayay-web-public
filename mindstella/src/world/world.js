@@ -1,147 +1,155 @@
 /**
- * Szenensteuerung: baut die Welt auf, bewegt die Figur automatisch zu den
- * Bauplätzen und führt die Kamera nah hinter ihr.
+ * Szenensteuerung: baut die Welt auf, bewegt die Figur automatisch und
+ * führt die Kamera leicht erhöht hinter ihr.
  *
  * Die Welt kennt keine Aufgabenlogik. Sie erhält nur Befehle:
- *   setBuilt(n)        – sofortiger Bauzustand (Laden, Neustart)
- *   build(from, to)    – Elemente from..to-1 nacheinander einbauen
- *   complete()         – Figur betritt die Hütte, Licht geht an
+ *   setBuilt(n, completed) – sofortiger Bauzustand (Laden, Neustart)
+ *   build(from, to)        – Elemente from..to-1 nacheinander einbauen
+ *   complete()             – Figur betritt die Hütte, es wird Nacht, Licht geht an
+ *
+ * Die Bedienoberfläche meldet über setVisibleRegion, welcher Bildbereich
+ * frei ist. Die Kamera passt Abstand und Bildmitte so an, dass Figur und
+ * Baustelle vollständig in diesem Bereich liegen.
  */
 import * as THREE from 'three';
-import { createTerrain, heightAt } from './terrain.js';
-import { createSky, createStars, createMoons, createMountains, createGrass, createVegetation, createCapsule, createSupplies, createSignal } from './environment.js';
+import { createTerrain, createWater, heightAt } from './terrain.js';
+import {
+  createSky,
+  createStars,
+  createMoons,
+  createClouds,
+  createMountains,
+  createTrees,
+  createGrass,
+  createFlowers,
+  createAlienPlants,
+  createRocks,
+  createCapsule,
+  createSiteProps,
+  createSignal,
+  GATHER_SPOT,
+} from './environment.js';
 import { createHut, workSpotFor } from './hut.js';
 import { HUT_ELEMENTS, HUT_DIMENSIONS } from './hutPlan.js';
-import { AVATARS, avatarById, createAvatar, animateAvatar } from './avatar.js';
+import { createAvatar, animateAvatar } from './avatar.js';
 
-const HOME = new THREE.Vector3(-0.9, 0, 3.4);
-const WALK_SPEED = 1.8;
+const HOME = new THREE.Vector3(-0.75, 0, 2.95);
+const WALK_SPEED = 1.9;
 const HAMMER_TIME = 0.55;
+const SITE_BOX = new THREE.Box3(new THREE.Vector3(-1.75, 0, -1.4), new THREE.Vector3(1.75, 3.5, 1.45));
+const LIGHT = {
+  day: { sun: 3.1, hemi: 1.35, hemiSky: '#cfe0ff', hemiGround: '#6d5a44', fog: '#c9d8e4', exposure: 1.0, moon: 0 },
+  night: { sun: 0, hemi: 0.42, hemiSky: '#4a5f9a', hemiGround: '#1c2030', fog: '#22305a', exposure: 1.15, moon: 0.75 },
+};
 
 export function createWorld(canvas, { reducedMotion = false } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog('#8a84a0', 38, 230);
+  scene.fog = new THREE.Fog(LIGHT.day.fog, 80, 900);
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 2000);
 
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 900);
-
-  // Licht: tief stehende, warme Sonne von links, kühles Himmelslicht
-  const hemi = new THREE.HemisphereLight('#b4c0e8', '#5a4d42', 1.45);
-  scene.add(hemi);
-  const sun = new THREE.DirectionalLight('#ffd6a8', 2.9);
-  sun.position.set(-14, 9, 4);
+  /* Licht: warme Nachmittagssonne von links, kühles Himmelslicht, nachts Mondlicht */
+  const hemi = new THREE.HemisphereLight(LIGHT.day.hemiSky, LIGHT.day.hemiGround, LIGHT.day.hemi);
+  const sun = new THREE.DirectionalLight('#ffe2b8', LIGHT.day.sun);
+  sun.position.set(-12, 14, 6);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -9;
-  sun.shadow.camera.right = 9;
-  sun.shadow.camera.top = 9;
-  sun.shadow.camera.bottom = -9;
-  sun.shadow.camera.near = 1;
-  sun.shadow.camera.far = 40;
+  Object.assign(sun.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 1, far: 50 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02;
-  scene.add(sun, sun.target);
-  const rim = new THREE.DirectionalLight('#8fb0ff', 0.45);
-  rim.position.set(8, 6, -10);
-  scene.add(rim);
+  const moonLight = new THREE.DirectionalLight('#9fb4ff', 0);
+  moonLight.position.set(10, 12, -12);
+  scene.add(hemi, sun, sun.target, moonLight);
 
-  scene.add(createSky(), createStars(), createMoons(), createMountains(), createTerrain(), createVegetation(), createCapsule(), createSupplies());
+  const sky = createSky();
+  const stars = createStars();
+  const moons = createMoons();
+  const clouds = createClouds();
+  const water = createWater();
   const grass = createGrass({ animated: !reducedMotion });
-  scene.add(grass.mesh);
+  const flowers = createFlowers();
+  const plants = createAlienPlants();
   const signal = createSignal();
-  scene.add(signal.group);
+  scene.add(
+    sky.mesh,
+    stars.mesh,
+    moons.group,
+    clouds.group,
+    createMountains(),
+    createTerrain(),
+    water.mesh,
+    createTrees(),
+    grass.mesh,
+    flowers.group,
+    plants.group,
+    createRocks(),
+    createCapsule(),
+    createSiteProps(),
+    signal.group
+  );
 
   const hut = createHut();
   scene.add(hut.group);
+  const avatar = createAvatar();
+  scene.add(avatar.root);
 
   let reduced = reducedMotion;
-  let avatar = null;
-  const actor = {
-    pos: HOME.clone(),
-    heading: Math.PI,
-    mode: 'idle',
-    phase: 0,
-    visible: true,
-  };
+  const actor = { pos: HOME.clone(), heading: Math.PI, mode: 'idle', phase: 0, visible: true };
 
-  // Ablaufwarteschlange: jeder Eintrag ist eine Folge von Schritten
+  /* ---------- Tag und Nacht ---------- */
+  let night = 0;
+  let nightTarget = 0;
+  function applyTime(t) {
+    sky.set(t);
+    stars.set(t);
+    moons.set(t);
+    clouds.set(t);
+    flowers.set(t);
+    plants.set(t);
+    const L = (k) => THREE.MathUtils.lerp(LIGHT.day[k], LIGHT.night[k], t);
+    sun.intensity = L('sun');
+    hemi.intensity = L('hemi');
+    moonLight.intensity = L('moon');
+    hemi.color.set(LIGHT.day.hemiSky).lerp(new THREE.Color(LIGHT.night.hemiSky), t);
+    hemi.groundColor.set(LIGHT.day.hemiGround).lerp(new THREE.Color(LIGHT.night.hemiGround), t);
+    scene.fog.color.set(LIGHT.day.fog).lerp(new THREE.Color(LIGHT.night.fog), t);
+    water.material.color.set('#3f78a8').lerp(new THREE.Color('#14244a'), t);
+    renderer.toneMappingExposure = L('exposure');
+  }
+  applyTime(0);
+
+  /* ---------- Abläufe ---------- */
   const queue = [];
   let current = null;
   const lastPlannedPos = HOME.clone();
-  let onIdle = null;
 
-  /* ---------- Kamera ---------- */
-  let cameraMode = 'play'; // 'select' | 'overview' | 'play' | 'complete'
-  const camPos = new THREE.Vector3(0, 3, 9);
-  const camLook = new THREE.Vector3(0, 1, 0);
-  const tmpPos = new THREE.Vector3();
-  const tmpLook = new THREE.Vector3();
-  let viewOffsetFraction = 0.2;
+  function enqueue(steps, done) {
+    queue.push({ steps, done });
+    if (!current) next();
+  }
 
-  function cameraTargets(outPos, outLook) {
-    if (cameraMode === 'select') {
-      const f = new THREE.Vector3(Math.sin(actor.heading), 0, Math.cos(actor.heading));
-      outPos.copy(actor.pos).addScaledVector(f, 3.0).add(new THREE.Vector3(0, 1.5, 0));
-      outLook.copy(actor.pos).add(new THREE.Vector3(0, 1.08, 0));
+  function next() {
+    current = queue.shift() || null;
+    if (!current) {
+      actor.mode = 'idle';
+      avatar.hammer.visible = false;
+      avatar.carry.visible = false;
       return;
     }
-    if (cameraMode === 'overview') {
-      outPos.set(-6.2, 4.4, 10.8);
-      outLook.set(0.3, 1.5, -0.6);
-      return;
-    }
-    // Über die Schulter: Kamera hinter der Figur, Blick auf die Hütte.
-    const focus = new THREE.Vector3(0, 1.1, 0.2);
-    const anchor = actor.visible ? actor.pos : new THREE.Vector3(0, 0, 2.2);
-    const away = new THREE.Vector3(anchor.x - focus.x, 0, anchor.z - focus.z);
-    if (away.lengthSq() < 0.01) away.set(0, 0, 1);
-    away.normalize();
-    // leicht zur Frontansicht hin drehen, damit die Kamera nie hinter die Hütte schwenkt
-    away.lerp(new THREE.Vector3(0, 0, 1), 0.45).normalize();
-    const side = new THREE.Vector3(away.z, 0, -away.x);
-    const complete = cameraMode === 'complete';
-    const dist = complete ? 9.5 : 4.3;
-    const height = complete ? 3.4 : 2.7;
-    outPos.copy(anchor).addScaledVector(away, dist).addScaledVector(side, complete ? 0 : -0.4);
-    outPos.y = Math.max(heightAt(outPos.x, outPos.z) + height, height);
-    outLook.copy(focus).lerp(new THREE.Vector3(anchor.x, 1.0, anchor.z), complete ? 0 : 0.25);
-    if (complete) outLook.y = 1.9;
-  }
-
-  /* ---------- Figur ---------- */
-
-  function setAvatar(id) {
-    if (avatar) scene.remove(avatar.root);
-    avatar = createAvatar(avatarById(id));
-    scene.add(avatar.root);
-    syncAvatar();
-  }
-
-  function syncAvatar() {
-    if (!avatar) return;
-    avatar.root.position.set(actor.pos.x, heightAt(actor.pos.x, actor.pos.z), actor.pos.z);
-    avatar.root.rotation.y = actor.heading;
-    avatar.root.visible = actor.visible;
-  }
-
-  function faceTowards(target) {
-    const dx = target.x - actor.pos.x;
-    const dz = target.z - actor.pos.z;
-    if (Math.hypot(dx, dz) > 0.01) return Math.atan2(dx, dz);
-    return actor.heading;
+    current.index = 0;
+    current.t = 0;
   }
 
   /** Weg um die Hütte herum: über eine vordere Ecke, nie durch die Wände. */
   function route(from, to) {
-    const front = 1.9;
-    const sideX = 2.3;
+    const front = 1.95;
+    const sideX = 2.35;
     const inFront = (p) => p.z >= front - 0.05;
     const onSide = (p, s) => Math.sign(p.x) === s && Math.abs(p.x) >= sideX - 0.05;
     if (inFront(from) && inFront(to)) return [to];
@@ -154,42 +162,22 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
     return pts;
   }
 
-  function walkSteps(to) {
-    return route(actor.pos.clone(), to.clone()).map((p) => ({ type: 'walk', to: p }));
-  }
-
-  /* ---------- Abläufe ---------- */
-
-  function enqueue(steps, done) {
-    queue.push({ steps, done });
-    if (!current) next();
-  }
-
-  function next() {
-    current = queue.shift() || null;
-    if (!current) {
-      actor.mode = 'idle';
-      if (avatar) {
-        avatar.hammer.visible = false;
-        avatar.carry.visible = false;
-      }
-      if (onIdle) onIdle();
-      return;
-    }
-    current.index = 0;
-    current.t = 0;
-  }
-
-  function finishSequenceInstantly(seq) {
+  function finishInstantly(seq) {
     for (const st of seq.steps) {
       if (st.type === 'place') st.indices.forEach((i) => hut.reveal(i, false));
+      if (st.type === 'walk') actor.pos.copy(st.to);
+      if (st.type === 'face') actor.heading = st.heading;
+      if (st.type === 'door') hut.openDoor(true);
       if (st.type === 'enter') {
         actor.visible = false;
         hut.setCompleted(true, false);
         signal.show(true);
       }
-      if (st.type === 'walk') actor.pos.copy(st.to);
-      if (st.type === 'face') actor.heading = st.heading;
+      if (st.type === 'night') {
+        nightTarget = 1;
+        night = 1;
+        applyTime(1);
+      }
     }
     if (seq.done) seq.done();
   }
@@ -198,7 +186,7 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
     if (!current) return;
     if (reduced) {
       const seq = current;
-      finishSequenceInstantly(seq);
+      finishInstantly(seq);
       next();
       return;
     }
@@ -213,25 +201,22 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
     let finished = false;
     switch (st.type) {
       case 'walk': {
-        const target = st.to;
-        const d = new THREE.Vector3(target.x - actor.pos.x, 0, target.z - actor.pos.z);
+        const d = new THREE.Vector3(st.to.x - actor.pos.x, 0, st.to.z - actor.pos.z);
         const len = d.length();
         actor.mode = 'walk';
         if (len < 0.04) {
           finished = true;
           break;
         }
-        const desired = Math.atan2(d.x, d.z);
-        let diff = desired - actor.heading;
+        let diff = Math.atan2(d.x, d.z) - actor.heading;
         diff = Math.atan2(Math.sin(diff), Math.cos(diff));
         actor.heading += diff * Math.min(1, dt * 10);
-        const stepLen = Math.min(len, WALK_SPEED * dt);
-        actor.pos.addScaledVector(d.normalize(), stepLen);
-        actor.phase += dt * 9.5;
+        actor.pos.addScaledVector(d.normalize(), Math.min(len, WALK_SPEED * dt));
+        actor.phase += dt * 9;
         break;
       }
       case 'carry':
-        if (avatar) avatar.carry.visible = st.visible;
+        avatar.carry.visible = st.visible;
         finished = true;
         break;
       case 'face': {
@@ -242,20 +227,26 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
         finished = Math.abs(diff) < 0.05 || current.t > 0.4;
         break;
       }
-      case 'place': {
+      case 'pickup':
         actor.mode = 'build';
-        if (avatar) {
-          avatar.hammer.visible = true;
-          avatar.carry.visible = false;
+        actor.phase = -Math.PI / 2;
+        if (current.t > 0.35) {
+          avatar.carry.visible = true;
+          finished = true;
         }
+        break;
+      case 'place': {
         const dur = st.duration || HAMMER_TIME;
+        actor.mode = 'build';
+        avatar.hammer.visible = !st.noHammer;
+        if (st.noHammer) avatar.carry.visible = current.t < dur * 0.5;
         actor.phase = (current.t / dur) * Math.PI * 2 - Math.PI / 2;
         if (!st.revealed && current.t > dur * 0.5) {
           st.indices.forEach((i) => hut.reveal(i, true));
           st.revealed = true;
-          if (st.onPlace) st.onPlace();
         }
         finished = current.t >= dur;
+        if (finished) avatar.hammer.visible = false;
         break;
       }
       case 'door':
@@ -268,6 +259,10 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
         signal.show(true);
         finished = true;
         break;
+      case 'night':
+        nightTarget = 1;
+        finished = true;
+        break;
       case 'wait':
         actor.mode = 'idle';
         finished = current.t >= st.seconds;
@@ -278,24 +273,120 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
     if (finished) {
       current.index++;
       current.t = 0;
-      if (avatar && st.type === 'place') avatar.hammer.visible = false;
     }
   }
 
-  /* ---------- Schleife ---------- */
+  /* ---------- Kamera ---------- */
+  let cameraMode = 'play'; // 'overview' | 'play' | 'complete'
+  const region = { top: 0, bottom: 0 }; // freier Bildbereich in CSS-Pixeln
+  const camPos = new THREE.Vector3(0, 4, 11);
+  const camLook = new THREE.Vector3(0, 1, 0);
+  const tmpPos = new THREE.Vector3();
+  const prevTarget = new THREE.Vector3();
+  let targetStable = false;
+  let framesSinceRegion = 0;
+  const tmpLook = new THREE.Vector3();
+  const probe = new THREE.PerspectiveCamera();
+  let viewW = 1;
+  let viewH = 1;
 
+  function focusPoints() {
+    const pts = [];
+    const b = SITE_BOX;
+    // nur die bereits gebaute Höhe einrahmen: anfangs ist die Figur größer
+    // im Bild, mit dem Bau weitet sich der Ausschnitt
+    const top = cameraMode === 'overview' || cameraMode === 'complete' ? b.max.y : Math.max(1.0, Math.min(b.max.y, hut.builtTop() + 0.3));
+    for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, top]) for (const z of [b.min.z, b.max.z]) pts.push(new THREE.Vector3(x, y, z));
+    if (actor.visible && cameraMode !== 'complete') {
+      const y0 = heightAt(actor.pos.x, actor.pos.z);
+      for (const dx of [-0.28, 0.28]) for (const dz of [-0.28, 0.28]) for (const y of [0, 1.6]) pts.push(new THREE.Vector3(actor.pos.x + dx, y0 + y, actor.pos.z + dz));
+    }
+    return pts;
+  }
+
+  /**
+   * Projektionsmitte in den freien Bereich legen, etwas unterhalb seiner
+   * Mitte: Die Baustelle steht dort, darüber bleibt Platz für Berge und Monde.
+   */
+  const CENTER_FRACTION = 0.68;
+  function applyViewOffset(cam) {
+    const top = region.top || 0;
+    const bottom = region.bottom || viewH;
+    const centerY = top + (bottom - top) * CENTER_FRACTION;
+    cam.setViewOffset(viewW, viewH, 0, viewH / 2 - centerY, viewW, viewH);
+  }
+
+  /** Prüft, ob alle Punkte im freien Bereich liegen (mit Rand). */
+  function fits(pos, look, pts) {
+    probe.copy(camera);
+    probe.position.copy(pos);
+    probe.lookAt(look);
+    probe.updateMatrixWorld();
+    applyViewOffset(probe);
+    probe.updateProjectionMatrix();
+    const top = (region.top || 0) + 10;
+    const bottom = (region.bottom || viewH) - 10;
+    const v = new THREE.Vector3();
+    for (const p of pts) {
+      v.copy(p).project(probe);
+      const sx = ((v.x + 1) / 2) * viewW;
+      const sy = ((1 - v.y) / 2) * viewH;
+      if (v.z > 1 || sx < 10 || sx > viewW - 10 || sy < top || sy > bottom) return false;
+    }
+    return true;
+  }
+
+  function cameraTargets(outPos, outLook) {
+    if (cameraMode === 'overview') {
+      outLook.set(0.2, 1.4, -0.2);
+      const dir = new THREE.Vector3(-0.15, 0.16, 1).normalize();
+      fitDistance(outPos, outLook, dir, focusPoints(), 9, 30);
+      return;
+    }
+    const complete = cameraMode === 'complete';
+    const anchor = actor.visible && !complete ? actor.pos : new THREE.Vector3(0, 0, 2.4);
+    // flacher Blick, Zielpunkt über der Baustelle: Baustelle und Figur im
+    // unteren Teil des freien Bereichs, darüber Landschaft, Berge und Monde
+    // feste Blickrichtung: die Kamera verschiebt sich nur seitlich, damit
+    // Berge und Monde ihren Platz im Bild behalten
+    const dir = new THREE.Vector3(0, complete ? 0.15 : 0.16, 1).normalize();
+    // Zielpunkt mittig über Baustelle und Figur, damit beide den Bereich füllen
+    const minX = Math.min(SITE_BOX.min.x, actor.visible ? anchor.x - 0.3 : 0);
+    const maxX = Math.max(SITE_BOX.max.x, actor.visible ? anchor.x + 0.3 : 0);
+    outLook.set((minX + maxX) / 2, 0.85, anchor.z * 0.55 - 0.1);
+    fitDistance(outPos, outLook, dir, focusPoints(), complete ? 8 : 4.2, 30);
+  }
+
+  /** Kleinster Abstand entlang dir, bei dem alle Punkte sichtbar sind. */
+  function fitDistance(outPos, look, dir, pts, minD, maxD) {
+    let lo = minD;
+    let hi = maxD;
+    const pos = new THREE.Vector3();
+    if (fits(pos.copy(look).addScaledVector(dir, lo), look, pts)) hi = lo;
+    else {
+      for (let i = 0; i < 9; i++) {
+        const mid = (lo + hi) / 2;
+        if (fits(pos.copy(look).addScaledVector(dir, mid), look, pts)) hi = mid;
+        else lo = mid;
+      }
+    }
+    outPos.copy(look).addScaledVector(dir, hi * 1.04);
+    outPos.y = Math.max(outPos.y, heightAt(outPos.x, outPos.z) + 1.5);
+  }
+
+  /* ---------- Schleife ---------- */
   const timer = new THREE.Timer();
   let running = true;
   let elapsed = 0;
+  let firstFrame = true;
 
   function resize() {
-    const w = canvas.clientWidth || window.innerWidth;
-    const h = canvas.clientHeight || window.innerHeight;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.fov = w / h < 0.6 ? 58 : 50;
-    // Bildmitte nach oben verschieben, weil die Aufgabenkarte unten liegt
-    camera.setViewOffset(w, h, 0, h * viewOffsetFraction, w, h);
+    viewW = canvas.clientWidth || window.innerWidth;
+    viewH = canvas.clientHeight || window.innerHeight;
+    renderer.setSize(viewW, viewH, false);
+    camera.aspect = viewW / viewH;
+    camera.fov = viewW / viewH < 0.6 ? 56 : 46;
+    applyViewOffset(camera);
     camera.updateProjectionMatrix();
   }
 
@@ -305,16 +396,24 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
     const dt = Math.min(0.1, timer.getDelta());
     elapsed += dt;
     stepSequence(dt);
-    if (avatar) {
-      animateAvatar(avatar, actor.mode, elapsed, dt, actor.phase);
-      syncAvatar();
+    if (Math.abs(nightTarget - night) > 0.001) {
+      night += (nightTarget - night) * Math.min(1, dt * (reduced ? 100 : 0.9));
+      applyTime(night);
     }
+    animateAvatar(avatar, actor.mode, elapsed, dt, actor.phase);
+    avatar.root.position.set(actor.pos.x, heightAt(actor.pos.x, actor.pos.z), actor.pos.z);
+    avatar.root.rotation.y = actor.heading;
+    avatar.root.visible = actor.visible;
     hut.update(dt);
-    signal.update(elapsed, reduced);
+    signal.update(elapsed, reduced, night);
     grass.uniforms.time.value = elapsed;
 
+    framesSinceRegion++;
+    prevTarget.copy(tmpPos);
     cameraTargets(tmpPos, tmpLook);
-    const k = reduced ? 1 : 1 - Math.exp(-dt * 2.6);
+    targetStable = prevTarget.distanceTo(tmpPos) < 0.01;
+    const k = reduced || firstFrame ? 1 : 1 - Math.exp(-dt * 2.4);
+    firstFrame = false;
     camPos.lerp(tmpPos, k);
     camLook.lerp(tmpLook, k);
     camera.position.copy(camPos);
@@ -325,114 +424,174 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
 
   window.addEventListener('resize', resize);
   resize();
-  cameraTargets(camPos, camLook);
   requestAnimationFrame(frame);
 
-  /* ---------- öffentliche Schnittstelle ---------- */
+  /* ---------- Schnittstelle ---------- */
+  function project(p) {
+    const v = p.clone().project(camera);
+    return { x: ((v.x + 1) / 2) * viewW, y: ((1 - v.y) / 2) * viewH, behind: v.z > 1 };
+  }
+  function rectOf(points) {
+    const pr = points.map(project);
+    return {
+      left: Math.min(...pr.map((p) => p.x)),
+      right: Math.max(...pr.map((p) => p.x)),
+      top: Math.min(...pr.map((p) => p.y)),
+      bottom: Math.max(...pr.map((p) => p.y)),
+      behind: pr.some((p) => p.behind),
+    };
+  }
 
   return {
-    avatars: AVATARS,
-    setAvatar,
     setReducedMotion(v) {
       reduced = v;
     },
-    setViewOffset(fraction) {
-      viewOffsetFraction = fraction;
-      resize();
+    /** freier Bildbereich zwischen Kopfleiste und Karte (CSS-Pixel) */
+    setVisibleRegion(top, bottom) {
+      if (region.top !== top || region.bottom !== bottom) framesSinceRegion = 0;
+      region.top = top;
+      region.bottom = bottom;
+      applyViewOffset(camera);
+      camera.updateProjectionMatrix();
     },
     setCameraMode(mode, { instant = false } = {}) {
       cameraMode = mode;
-      if (mode === 'select') {
-        actor.pos.copy(HOME);
-        actor.heading = 0.35;
-        actor.visible = true;
-      } else if (mode === 'play' || mode === 'overview') {
-        if (actor.visible && !current) actor.heading = Math.PI;
-      }
-      if (instant || reduced) cameraTargets(camPos, camLook);
+      if (instant || reduced) firstFrame = true;
     },
     showBlueprint(v) {
       hut.showBlueprint(v);
     },
-    /** sofortiger Zustand ohne Animation */
     setBuilt(n, completed) {
       queue.length = 0;
       current = null;
       hut.setBuilt(n);
-      hut.openDoor(false);
+      hut.openDoor(Boolean(completed));
       hut.setCompleted(Boolean(completed), false);
       signal.show(Boolean(completed));
+      nightTarget = night = completed ? 1 : 0;
+      applyTime(night);
       actor.visible = !completed;
       actor.pos.copy(HOME);
       lastPlannedPos.copy(HOME);
       actor.heading = Math.PI;
       actor.mode = 'idle';
+      avatar.carry.visible = false;
+      avatar.hammer.visible = false;
+      firstFrame = true;
     },
     /**
-     * Baut die Elemente [from, to) nacheinander ein. onPlace wird je Element
-     * aufgerufen, done nach dem letzten.
+     * Baut die Elemente [from, to) ein. Holz wird am Waldrand geholt und am
+     * Lagerplatz abgelegt; alle anderen Teile werden mit höchstens acht
+     * Hammerschlägen eingebaut.
      */
-    build(from, to, { onPlace, done } = {}) {
+    build(from, to, { done } = {}) {
       if (to <= from) {
         if (done) done();
         return;
       }
-      // Ein Gang zum Bauplatz des ersten Elements, dann alle Elemente in
-      // schneller Folge. Gesamtdauer bleibt so bei wenigen Sekunden.
-      const count = to - from;
-      // höchstens acht Hammerschläge; große Sprünge setzen mehrere Teile je Schlag
-      const strikes = Math.min(count, 8);
-      const perStrike = Math.ceil(count / strikes);
-      const strike = THREE.MathUtils.clamp(2.0 / strikes, 0.3, HAMMER_TIME);
-      const el = HUT_ELEMENTS[from];
-      const spot = workSpotFor(el);
-      const steps = [{ type: 'carry', visible: true }];
-      const start = queue.length || current ? lastPlannedPos.clone() : actor.pos.clone();
-      for (const p of route(start, spot)) steps.push({ type: 'walk', to: p });
-      lastPlannedPos.copy(spot);
-      // Blick auf die Mitte der neuen Bauteile
-      let cx = 0;
-      let cz = 0;
-      for (let i = from; i < to; i++) {
-        cx += HUT_ELEMENTS[i].pos[0];
-        cz += HUT_ELEMENTS[i].pos[2];
+      const steps = [];
+      let pos = queue.length || current ? lastPlannedPos.clone() : actor.pos.clone();
+      const goTo = (target) => {
+        for (const p of route(pos, target)) steps.push({ type: 'walk', to: p });
+        pos = target.clone();
+      };
+      const material = [];
+      const building = [];
+      for (let i = from; i < to; i++) (HUT_ELEMENTS[i].phase === 'material' ? material : building).push(i);
+
+      if (material.length) {
+        // Holz am Hackklotz holen und am Lager ablegen: ein Gang pro Schritt
+        goTo(GATHER_SPOT);
+        steps.push({ type: 'face', heading: Math.PI / 2 });
+        steps.push({ type: 'pickup' });
+        const spot = workSpotFor(HUT_ELEMENTS[material[0]]);
+        goTo(spot);
+        steps.push({ type: 'face', heading: Math.atan2(0.85, -1.25) });
+        const per = Math.ceil(material.length / Math.min(material.length, 4));
+        for (let t = 0; t < material.length; t += per) {
+          steps.push({ type: 'place', indices: material.slice(t, t + per), duration: 0.45, noHammer: true });
+        }
       }
-      steps.push({ type: 'face', heading: Math.atan2(cx / count - spot.x, cz / count - spot.z) });
-      for (let i = from; i < to; i += perStrike) {
-        const indices = [];
-        for (let j = i; j < Math.min(to, i + perStrike); j++) indices.push(j);
-        steps.push({ type: 'place', indices, duration: strike, onPlace: onPlace ? () => indices.forEach(onPlace) : null });
+      if (building.length) {
+        const strikes = Math.min(building.length, 8);
+        const per = Math.ceil(building.length / strikes);
+        const dur = THREE.MathUtils.clamp(2.0 / strikes, 0.3, HAMMER_TIME);
+        const spot = workSpotFor(HUT_ELEMENTS[building[0]]);
+        steps.push({ type: 'carry', visible: false });
+        goTo(spot);
+        let cx = 0;
+        let cz = 0;
+        for (const i of building) {
+          cx += HUT_ELEMENTS[i].pos[0];
+          cz += HUT_ELEMENTS[i].pos[2];
+        }
+        steps.push({ type: 'face', heading: Math.atan2(cx / building.length - spot.x, cz / building.length - spot.z) });
+        for (let i = 0; i < building.length; i += per) steps.push({ type: 'place', indices: building.slice(i, i + per), duration: dur });
       }
+      lastPlannedPos.copy(pos);
       enqueue(steps, done);
     },
-    /** Figur geht zur Tür und betritt die Hütte; danach leuchtet das Licht. */
+    /** Figur betritt die Hütte; es wird Nacht, das Licht geht an. */
     complete({ done } = {}) {
       const door = new THREE.Vector3(0, 0, HUT_DIMENSIONS.HZ + 0.95);
       const steps = [{ type: 'carry', visible: false }];
-      const startFrom = queue.length || current ? lastPlannedPos.clone() : actor.pos.clone();
-      for (const p of route(startFrom, door)) steps.push({ type: 'walk', to: p });
+      const start = queue.length || current ? lastPlannedPos.clone() : actor.pos.clone();
+      for (const p of route(start, door)) steps.push({ type: 'walk', to: p });
+      steps.push({ type: 'face', heading: Math.PI }, { type: 'door' }, { type: 'night' });
+      steps.push({ type: 'walk', to: new THREE.Vector3(0, 0, HUT_DIMENSIONS.HZ - 0.3) }, { type: 'enter' }, { type: 'wait', seconds: 1.4 });
       lastPlannedPos.copy(door);
-      steps.push({ type: 'face', heading: Math.PI });
-      steps.push({ type: 'door' });
-      steps.push({ type: 'walk', to: new THREE.Vector3(0, 0, HUT_DIMENSIONS.HZ - 0.3) });
-      steps.push({ type: 'enter' });
-      steps.push({ type: 'wait', seconds: 1.2 });
       enqueue(steps, () => {
         cameraMode = 'complete';
         if (done) done();
       });
     },
-    /** true, solange eine Bauanimation läuft */
     get busy() {
       return Boolean(current) || queue.length > 0;
     },
-    /** für Tests und Fehlersuche */
+    /** true, sobald die Kamera ihr Ziel erreicht hat (für Tests) */
+    get cameraSettled() {
+      return camPos.distanceTo(tmpPos) < 0.03 && camLook.distanceTo(tmpLook) < 0.03 && targetStable && framesSinceRegion >= 3;
+    },
+    /** Bildschirmrechtecke für Tests und Layoutprüfung (CSS-Pixel). */
+    screenRects() {
+      const y0 = heightAt(actor.pos.x, actor.pos.z);
+      const a = actor.pos;
+      const avatarPts = [];
+      for (const dx of [-0.25, 0.25]) for (const dz of [-0.25, 0.25]) for (const y of [0, 1.55]) avatarPts.push(new THREE.Vector3(a.x + dx, y0 + y, a.z + dz));
+      // sichtbarer Teil der Baustelle: Grundfläche bis zur gebauten Höhe
+      const sitePts = [];
+      const b = SITE_BOX;
+      const top = Math.max(0.3, Math.min(b.max.y, hut.builtTop()));
+      for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, top]) for (const z of [b.min.z, b.max.z]) sitePts.push(new THREE.Vector3(x, y, z));
+      return {
+        avatar: actor.visible ? rectOf(avatarPts) : null,
+        site: rectOf(sitePts),
+        moons: moons.positions.map((p) => project(p.clone())),
+        view: { width: viewW, height: viewH, top: region.top, bottom: region.bottom },
+        night,
+      };
+    },
+    debugFit(d) {
+      const look = camLook.clone();
+      const dir = camPos.clone().sub(camLook).normalize();
+      const pos = look.clone().addScaledVector(dir, d);
+      probe.copy(camera);
+      probe.position.copy(pos);
+      probe.lookAt(look);
+      probe.updateMatrixWorld();
+      applyViewOffset(probe);
+      probe.updateProjectionMatrix();
+      return focusPoints().map((p) => {
+        const v = p.clone().project(probe);
+        return [p.toArray().map((x) => +x.toFixed(1)), Math.round(((v.x + 1) / 2) * viewW), Math.round(((1 - v.y) / 2) * viewH), +v.z.toFixed(3)];
+      });
+    },
+    get debugCamera() {
+      return { pos: camPos.toArray().map((v) => +v.toFixed(2)), look: camLook.toArray().map((v) => +v.toFixed(2)), dist: +camPos.distanceTo(camLook).toFixed(2), fov: camera.fov, region: { ...region }, view: [viewW, viewH] };
+    },
     get debugState() {
       const st = current ? current.steps[current.index] : null;
-      return { queued: queue.length, index: current ? current.index : -1, step: st ? { type: st.type, to: st.to ? st.to.toArray() : null } : null, pos: actor.pos.toArray(), heading: actor.heading, mode: actor.mode };
-    },
-    onIdle(fn) {
-      onIdle = fn;
+      return { queued: queue.length, index: current ? current.index : -1, step: st ? st.type : null, pos: actor.pos.toArray(), mode: actor.mode };
     },
     pause() {
       running = false;
@@ -444,5 +603,6 @@ export function createWorld(canvas, { reducedMotion = false } = {}) {
       requestAnimationFrame(frame);
     },
     renderer,
+    scene,
   };
 }

@@ -29,7 +29,7 @@ export function createInitialState(now = Date.now()) {
   return {
     version: SAVE_VERSION,
     profile: {
-      avatarId: null,
+      welcomed: false,
       introSeen: false,
       speechNoticeAccepted: false,
       notificationAsked: false,
@@ -73,12 +73,6 @@ export function clampText(text, max) {
 }
 
 /* ---------- Profil und Einstellungen ---------- */
-
-export function chooseAvatar(state, avatarId, now = Date.now()) {
-  const s = clone(state);
-  s.profile.avatarId = avatarId;
-  return touch(s, now);
-}
 
 export function markIntroSeen(state, now = Date.now()) {
   const s = clone(state);

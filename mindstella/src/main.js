@@ -10,7 +10,7 @@ import { updateSettings } from './domain/state.js';
 async function boot() {
   const store = await createStore();
   const prefersReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (prefersReduced && !store.state.profile.avatarId && !store.state.settings.reducedMotion) {
+  if (prefersReduced && !store.state.profile.welcomed && !store.state.settings.reducedMotion) {
     // Systemeinstellung beim ersten Start übernehmen; danach entscheidet der Nutzer.
     await store.commit(updateSettings(store.state, { reducedMotion: true }), { immediate: true });
   }

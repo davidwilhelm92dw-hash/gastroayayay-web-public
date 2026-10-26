@@ -3,8 +3,9 @@
  * Bauplan-Vorschau und Licht nach Fertigstellung.
  */
 import * as THREE from 'three';
-import { HUT_ELEMENTS, HUT_DIMENSIONS, WINDOW } from './hutPlan.js';
+import { HUT_ELEMENTS, HUT_DIMENSIONS, WINDOW, LOG_PILE } from './hutPlan.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mulberry32, range } from './random.js';
 
 const { HX, HZ, FLOOR_TOP, PLATE_TOP, RIDGE_Y, DOOR_HALF } = HUT_DIMENSIONS;
@@ -48,7 +49,10 @@ function makeMaterials() {
     roof: new THREE.MeshStandardMaterial({ color: '#4d5560', roughness: 0.8, flatShading: true }),
     roofEdge: new THREE.MeshStandardMaterial({ color: '#3d434c', roughness: 0.8 }),
     trim: wood('#8e6a45', '#4a301b', 9),
-    stone: new THREE.MeshStandardMaterial({ color: '#8a8794', roughness: 0.95, flatShading: true }),
+    stone: new THREE.MeshStandardMaterial({ color: '#a39d93', roughness: 0.95, flatShading: true }),
+    stoneDark: new THREE.MeshStandardMaterial({ color: '#8a847b', roughness: 0.95, flatShading: true }),
+    bark: wood('#6d4f36', '#3b2717', 11, 0.95),
+    logEnd: new THREE.MeshStandardMaterial({ color: '#cfa978', roughness: 0.9 }),
     gutter: new THREE.MeshStandardMaterial({ color: '#a56a45', roughness: 0.45, metalness: 0.6 }),
     door: wood('#8a6440', '#41291a', 10),
     iron: new THREE.MeshStandardMaterial({ color: '#2d2c2f', roughness: 0.6, metalness: 0.7 }),
@@ -79,13 +83,53 @@ function boardPanel(width, height, alongZ, mats, seed) {
   return shadowed(new THREE.Mesh(mergeGeometries(geos), mats[Math.floor(rng() * mats.length)]));
 }
 
+/** Trockenmauer aus unregelmäßigen Steinen, zu zwei Meshes zusammengefasst. */
+function drystoneWall(sx, sy, sz, mats, seed) {
+  const rng = mulberry32(seed * 31 + 7);
+  const along = sx >= sz;
+  const len = along ? sx : sz;
+  const depth = along ? sz : sx;
+  const rows = 3;
+  const rowH = sy / rows;
+  const light = [];
+  const dark = [];
+  for (let r = 0; r < rows; r++) {
+    let pos = -len / 2 + (r % 2 ? 0.08 : 0);
+    while (pos < len / 2 - 0.02) {
+      const w = Math.min(range(rng, 0.16, 0.3), len / 2 - pos);
+      const g = new RoundedBoxGeometry(along ? w - 0.012 : depth * range(rng, 0.92, 1), rowH - 0.01, along ? depth * range(rng, 0.92, 1) : w - 0.012, 1, 0.025);
+      const cx = pos + w / 2;
+      g.translate(along ? cx : 0, -sy / 2 + rowH * (r + 0.5), along ? 0 : cx);
+      (rng() > 0.4 ? light : dark).push(g);
+      pos += w;
+    }
+  }
+  const grp = new THREE.Group();
+  grp.add(shadowed(new THREE.Mesh(mergeGeometries(light), mats.stone)));
+  if (dark.length) grp.add(shadowed(new THREE.Mesh(mergeGeometries(dark), mats.stoneDark)));
+  return grp;
+}
+
 function buildElement(el, mats, index) {
   const [sx, sy, sz] = el.size;
   let obj;
   switch (el.kind) {
-    case 'stone': {
-      const geo = el.label === 'Trittstein' ? new THREE.BoxGeometry(sx, sy, sz, 1, 1, 1) : new THREE.CylinderGeometry(sx * 0.5, sx * 0.6, sy, 7);
-      obj = shadowed(new THREE.Mesh(geo, mats.stone));
+    case 'step':
+      obj = shadowed(new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mats.stone));
+      break;
+    case 'plinth':
+      obj = drystoneWall(sx, sy, sz, mats, index);
+      break;
+    case 'log': {
+      obj = new THREE.Group();
+      const body = shadowed(new THREE.Mesh(new THREE.CylinderGeometry(sx, sx * 1.06, sy, 12), mats.bark));
+      obj.add(body);
+      for (const end of [-1, 1]) {
+        const cap = new THREE.Mesh(new THREE.CircleGeometry(sx * (end > 0 ? 1 : 1.06), 12), mats.logEnd);
+        cap.position.y = (end * sy) / 2 + end * 0.002;
+        cap.rotation.x = -end * Math.PI / 2;
+        obj.add(cap);
+      }
       break;
     }
     case 'panel':
@@ -159,6 +203,7 @@ function buildElement(el, mats, index) {
 
 /** Standplatz der Figur für ein Element, immer vor oder neben der Hütte. */
 export function workSpotFor(el) {
+  if (el.phase === 'material') return new THREE.Vector3(LOG_PILE.x - 0.85, 0, LOG_PILE.z + 1.25);
   const [x, , z] = el.pos;
   const side = Math.abs(x) / 1.7 > Math.max(z, 0) / 1.4 && Math.abs(x) > 1.2;
   if (side || z < -0.4) {
@@ -166,44 +211,6 @@ export function workSpotFor(el) {
     return new THREE.Vector3(sx, 0, THREE.MathUtils.clamp(z, -0.8, 1.6));
   }
   return new THREE.Vector3(THREE.MathUtils.clamp(x, -1.4, 1.4), 0, 2.15);
-}
-
-function createPile(mats) {
-  const g = new THREE.Group();
-  const items = [];
-  const rng = mulberry32(31);
-  for (let layer = 0; layer < 4; layer++) {
-    for (let i = 0; i < 3; i++) {
-      const m = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 2.0), [mats.plank, mats.beam, mats.panel[1]][(layer + i) % 3]));
-      m.position.set(i * 0.19 - 0.19 + range(rng, -0.02, 0.02), 0.1 + layer * 0.065, range(rng, -0.05, 0.05));
-      g.add(m);
-      items.push(m);
-    }
-  }
-  for (const [x, z] of [[-0.45, -0.7], [-0.5, 0.75]]) {
-    const b = shadowed(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.1), mats.beam));
-    b.position.set(x + 0.45, 0.035, z);
-    g.add(b);
-  }
-  const stones = [];
-  for (let i = 0; i < 4; i++) {
-    const s = shadowed(new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 0), mats.stone));
-    s.position.set(0.55 + (i % 2) * 0.25, 0.12, -0.5 + Math.floor(i / 2) * 0.3);
-    g.add(s);
-    stones.push(s);
-  }
-  g.position.set(-2.9, 0, 2.4);
-  g.rotation.y = 0.35;
-  return {
-    group: g,
-    setRemaining(fraction) {
-      const n = Math.ceil(items.length * fraction);
-      items.forEach((m, i) => (m.visible = i < n));
-      const ns = Math.ceil(stones.length * Math.min(1, fraction * 3));
-      stones.forEach((m, i) => (m.visible = i < ns));
-    },
-    pickupSpot: new THREE.Vector3(-2.3, 0, 3.15),
-  };
 }
 
 function createBlueprint() {
@@ -241,8 +248,8 @@ export function createHut() {
   const ghost = new THREE.Group();
   HUT_ELEMENTS.forEach((el, i) => {
     // Flächen (Wände, Dach, Tür) als ein Umriss, Tragglieder mit ihren Kanten
-    if (['panel', 'roof', 'door', 'shutter', 'gable', 'gutter', 'trim'].includes(el.kind) || el.kind === 'stone') {
-      if (el.kind === 'gutter' || el.kind === 'trim' || el.label === 'Trittstein') return;
+    if (['panel', 'roof', 'door', 'shutter', 'gable', 'gutter', 'trim', 'plinth', 'step', 'log'].includes(el.kind)) {
+      if (['gutter', 'trim', 'step', 'log'].includes(el.kind)) return;
       if (el.kind === 'gable') {
         const node = buildElement(el, mats, i);
         node.updateMatrixWorld(true);
@@ -277,8 +284,6 @@ export function createHut() {
   const blueprint = createBlueprint();
   group.add(blueprint);
 
-  const pile = createPile(mats);
-  group.add(pile.group);
 
   // Licht nach Fertigstellung: Innenraum, Fenster, Laterne neben der Tür
   const interior = new THREE.PointLight('#ffb36b', 0, 7, 1.6);
@@ -314,13 +319,9 @@ export function createHut() {
   let doorAngle = 0;
   let doorTarget = 0;
 
-  function applyPile() {
-    pile.setRemaining(1 - built / elements.length);
-  }
 
   return {
     group,
-    pile,
     elementCount: elements.length,
     /** sofortiger Zustand, z. B. nach dem Laden */
     setBuilt(n) {
@@ -331,10 +332,19 @@ export function createHut() {
         node.userData.inner.position.y = 0;
       });
       pops.length = 0;
-      applyPile();
     },
     get built() {
       return built;
+    },
+    /** Oberkante der bereits gebauten Teile (für die Bildeinpassung) */
+    builtTop() {
+      let top = 0;
+      for (let i = 0; i < built; i++) {
+        const el = HUT_ELEMENTS[i];
+        if (el.phase === 'material') continue;
+        top = Math.max(top, el.pos[1] + el.size[1] / 2);
+      }
+      return top;
     },
     /** zeigt ein einzelnes Element, optional mit kurzer Einbauanimation */
     reveal(index, animate) {
@@ -342,7 +352,6 @@ export function createHut() {
       if (!node || node.visible) return;
       node.visible = true;
       built = Math.max(built, index + 1);
-      applyPile();
       if (animate) {
         node.userData.inner.position.y = 0.45;
         node.userData.inner.scale.setScalar(0.85);

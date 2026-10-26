@@ -6,7 +6,7 @@
 import * as S from '../domain/state.js';
 import { findRoutine, findTemplate, parseDictation, findSmallerSteps } from '../domain/templates.js';
 import { HUT_ELEMENTS, reachedPhases, PHASES } from '../world/hutPlan.js';
-import { AVATARS } from '../world/avatar.js';
+import { roomById, orderedSteps } from '../domain/rooms.js';
 import { cardForPhase } from '../content/knowledge.js';
 import * as P from '../platform/platform.js';
 import { createAudio } from './audio.js';
@@ -20,7 +20,8 @@ const DONE_LOCK_MS = 700;
 export function createApp({ store, world, root }) {
   const view = {
     screen: null,
-    avatarIndex: 0,
+    room: null,
+    selection: [],
     feedback: '',
     knowledgeHint: null,
     completionShown: false,
@@ -67,7 +68,7 @@ export function createApp({ store, world, root }) {
 
   function decideScreen() {
     const s = state();
-    if (!s.profile.avatarId) return 'welcome';
+    if (!s.profile.welcomed && !s.task && !s.world.completed) return 'welcome';
     if (s.task && (s.task.status === 'active' || s.task.status === 'paused')) return 'play';
     if (s.world.completed) return 'complete';
     if (!s.profile.introSeen) return 'intro';
@@ -85,36 +86,46 @@ export function createApp({ store, world, root }) {
     const s = state();
     world.setReducedMotion(s.settings.reducedMotion);
     document.documentElement.classList.toggle('reduced-motion', s.settings.reducedMotion);
-    switch (view.screen) {
-      case 'welcome':
-        world.showBlueprint(false);
-        world.setCameraMode('overview');
-        world.setViewOffset(0.05);
-        break;
-      case 'avatar':
-        world.showBlueprint(false);
-        world.setCameraMode('select');
-        world.setViewOffset(0.16);
-        break;
-      case 'intro':
-        world.showBlueprint(true);
-        world.setCameraMode('overview');
-        world.setViewOffset(0.24);
-        break;
-      case 'complete':
-        world.showBlueprint(false);
-        world.setCameraMode(view.completionShown || s.world.completed ? 'complete' : 'play');
-        world.setViewOffset(0.22);
-        break;
-      default:
-        world.showBlueprint(false);
-        world.setCameraMode('play');
-        world.setViewOffset(0.2);
+    world.showBlueprint(view.screen === 'intro' || view.screen === 'welcome');
+    if (view.screen === 'complete') world.setCameraMode(view.completionShown || s.world.completed ? 'complete' : 'play');
+    else if (view.screen === 'welcome' || view.screen === 'intro') world.setCameraMode('overview');
+    else world.setCameraMode('play');
+  }
+
+  /**
+   * Meldet der Welt den freien Bildbereich zwischen Kopfleiste und Karte,
+   * damit Figur und Baustelle nie verdeckt werden.
+   */
+  const FORM_SCREENS = new Set(['capture', 'rooms', 'activities', 'edit', 'audio']);
+  function updateVisibleRegion() {
+    if (FORM_SCREENS.has(view.screen)) {
+      // Formulare verdecken die Welt ohnehin weitgehend: fester, ruhiger Ausschnitt
+      if (frameObserver) frameObserver.disconnect();
+      world.setVisibleRegion(60, Math.round(window.innerHeight * 0.62));
+      return;
+    }
+    const topEl = root.querySelector('[data-frame-top]');
+    const bottomEl = root.querySelector('[data-frame-bottom]');
+    const top = topEl ? topEl.getBoundingClientRect().bottom + 6 : 0;
+    const bottom = bottomEl ? bottomEl.getBoundingClientRect().top - 6 : window.innerHeight;
+    world.setVisibleRegion(top, Math.max(top + 80, bottom));
+    // Höhe der Karte kann sich ändern (Rückmeldung, Schriftgröße): erneut messen
+    if (frameObserver) frameObserver.disconnect();
+    if (bottomEl && 'ResizeObserver' in window) {
+      frameObserver = new ResizeObserver(() => {
+        // entfernte Karten melden Größe 0: ignorieren
+        if (!bottomEl.isConnected) return;
+        const b = bottomEl.getBoundingClientRect().top - 6;
+        world.setVisibleRegion(top, Math.max(top + 80, b));
+      });
+      frameObserver.observe(bottomEl);
     }
   }
+  let frameObserver = null;
 
   function render() {
     renderScreen(root, view.screen, ctx());
+    updateVisibleRegion();
   }
 
   function renderTopbarOnly() {
@@ -154,26 +165,43 @@ export function createApp({ store, world, root }) {
   /* ---------- Aktionen ---------- */
 
   const actions = {
-    /* Start und Figur */
-    beginAvatarChoice() {
-      const id = state().profile.avatarId;
-      view.avatarIndex = Math.max(0, AVATARS.findIndex((a) => a.id === id));
-      world.setAvatar(AVATARS[view.avatarIndex].id);
-      go('avatar');
-    },
-    browseAvatar(delta) {
-      view.avatarIndex = (view.avatarIndex + delta + AVATARS.length) % AVATARS.length;
-      world.setAvatar(AVATARS[view.avatarIndex].id);
-      render();
-    },
-    confirmAvatar() {
-      commit(S.chooseAvatar(state(), AVATARS[view.avatarIndex].id), { immediate: true });
-      world.setAvatar(AVATARS[view.avatarIndex].id);
+    /* Start */
+    beginChapter() {
+      commit(S.updateProfile(state(), { welcomed: true }), { immediate: true });
       go(decideScreen());
     },
     finishIntro() {
-      commit(S.markIntroSeen(state()), { immediate: true });
+      commit(S.markIntroSeen(S.updateProfile(state(), { welcomed: true })), { immediate: true });
       go('capture');
+    },
+
+    /* Hausarbeit über Räume */
+    openRooms() {
+      go('rooms');
+    },
+    chooseRoom(id) {
+      if (!roomById(id)) return;
+      if (view.room !== id) view.selection = [];
+      view.room = id;
+      go('activities');
+    },
+    toggleActivity(id) {
+      const set = new Set(view.selection);
+      if (set.has(id)) set.delete(id);
+      else set.add(id);
+      view.selection = [...set];
+      const sc = root.querySelector('.card.scroll')?.scrollTop || 0;
+      render();
+      const card = root.querySelector('.card.scroll');
+      if (card) card.scrollTop = sc;
+    },
+    submitActivities() {
+      const room = roomById(view.room);
+      const steps = orderedSteps(room, view.selection);
+      if (!steps.length) return;
+      const draft = { stage: 'edit', title: room.title, steps, thread: '', suggestion: null, dictatedSteps: true, saveAsRoutine: false, roomId: room.id };
+      commit(S.setDraft(state(), draft), { immediate: true });
+      go('edit');
     },
 
     /* Aufgabenerfassung */
@@ -482,14 +510,13 @@ export function createApp({ store, world, root }) {
   async function init() {
     const s = state();
     world.setReducedMotion(s.settings.reducedMotion);
-    if (s.profile.avatarId) world.setAvatar(s.profile.avatarId);
-    else world.setAvatar(AVATARS[0].id);
     world.setBuilt(s.world.elementsBuilt, s.world.completed);
     view.completionShown = s.world.completed;
     view.notification = await P.notificationPermission();
     syncReminder();
     go(decideScreen());
     audio.check();
+    window.addEventListener('resize', () => requestAnimationFrame(updateVisibleRegion));
 
     P.onAppActiveChange(async (active) => {
       if (!active) {

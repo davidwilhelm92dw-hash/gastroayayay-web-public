@@ -23,8 +23,9 @@
   --shadow: 0 10px 30px rgba(8, 10, 18, 0.35);
   --font: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
   --font-brand: 'Jost', 'Atkinson Hyperlegible Next', sans-serif;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Android-WebViews vor Version 140 liefern env() als 0; Capacitor setzt dann --safe-area-inset-* */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
   color-scheme: dark;
 }
 
@@ -247,7 +248,7 @@ button {
 }
 
 .btn--done {
-  min-height: 64px;
+  min-height: 58px;
   font-size: 1.25rem;
   letter-spacing: 0.01em;
 }
@@ -362,29 +363,47 @@ button {
 
 /* ---------- Aufgabenkarte ---------- */
 
+.task-card {
+  padding: 14px 16px 12px;
+}
+
+.task-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
 .task-card .task-title {
-  font-size: 0.88rem;
+  font-size: 0.86rem;
   font-weight: 600;
   color: var(--ink-soft);
-  margin: 0 0 4px;
+  margin: 0;
   overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .task-card .step-text {
-  font-size: 1.5rem;
+  font-size: 1.38rem;
   font-weight: 700;
-  line-height: 1.25;
-  margin: 0 0 6px;
+  line-height: 1.22;
+  margin: 2px 0 6px;
   overflow-wrap: anywhere;
 }
 
 .task-card .step-meta {
   display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.9rem;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.86rem;
   color: var(--ink-soft);
-  margin-bottom: 12px;
+  white-space: nowrap;
+}
+
+.task-card .step-meta .progress {
+  flex: 1;
+  margin: 0;
 }
 
 .progress {
@@ -392,7 +411,6 @@ button {
   background: var(--paper-2);
   border-radius: 99px;
   overflow: hidden;
-  margin-bottom: 14px;
 }
 
 .progress > span {
@@ -403,20 +421,43 @@ button {
   transition: width 0.5s ease;
 }
 
+.link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 10px;
+  margin: -6px -6px -6px 0;
+  border-radius: 999px;
+  color: var(--primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex: none;
+}
+
+.link-chip svg {
+  width: 16px;
+  height: 16px;
+}
+
+.link-chip--new {
+  background: #fbf0d8;
+  color: #7a5718;
+}
+
 .helpers {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .helpers .btn {
-  min-height: 48px;
+  min-height: 46px;
   padding: 0 6px;
   font-size: 0.88rem;
-  flex-direction: column;
-  gap: 2px;
-  line-height: 1.15;
+  gap: 6px;
 }
 
 .helpers svg {
@@ -425,11 +466,11 @@ button {
 }
 
 .feedback {
-  min-height: 1.4em;
-  font-size: 0.92rem;
+  min-height: 1.3em;
+  font-size: 0.86rem;
   color: var(--primary);
   font-weight: 600;
-  margin: -4px 0 8px;
+  margin: 4px 0 6px;
 }
 
 .paused-badge {
@@ -916,4 +957,208 @@ button {
   .card {
     padding: 14px 14px 12px;
   }
+}
+
+/* ---------- Auswahl: Hausarbeit ---------- */
+
+.option-tile {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 14px;
+  margin: 6px 0 4px;
+  border-radius: 14px;
+  background: #e6f0eb;
+  border: 2px solid var(--primary);
+  color: var(--ink);
+  text-align: left;
+}
+
+.option-tile strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.option-tile .desc,
+.room-tile .desc {
+  display: block;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+.option-icon,
+.room-icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  color: var(--primary);
+}
+
+.option-icon svg,
+.room-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.divider-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.divider-label::before,
+.divider-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.room-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.room-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 104px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fffdf8;
+  border: 2px solid var(--line);
+  color: var(--ink);
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.room-tile:active {
+  border-color: var(--primary);
+  background: #eef6f2;
+}
+
+.room-tile strong {
+  font-size: 1.02rem;
+}
+
+.activity-group {
+  margin-top: 10px;
+}
+
+.group-label {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.activity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  background: #fffdf8;
+  border: 2px solid var(--line);
+  color: var(--ink);
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.activity[aria-checked='true'] {
+  border-color: var(--primary);
+  background: #eef6f2;
+}
+
+.activity .check {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  border: 2px solid var(--ink-soft);
+  position: relative;
+}
+
+.activity[aria-checked='true'] .check {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.activity[aria-checked='true'] .check::after {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 6px;
+  height: 11px;
+  border: solid #fff;
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg);
+}
+
+.activity-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Bauübersicht ---------- */
+
+.phase-steps {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  counter-reset: phase;
+  display: grid;
+  gap: 4px;
+}
+
+.phase-steps li {
+  counter-increment: phase;
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+  font-size: 0.92rem;
+}
+
+.phase-steps li::before {
+  content: counter(phase);
+  grid-row: span 2;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--paper-2);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phase-steps li span {
+  color: var(--ink-soft);
+}
+
+button,
+[role='button'] {
+  touch-action: manipulation;
 }

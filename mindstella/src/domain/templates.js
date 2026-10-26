@@ -1,61 +1,10 @@
 /**
- * Lokale Vorlagen, regelbasierte Zuordnung und Zerlegung diktierter Texte.
+ * Regelbasierte Zuordnung zu Raumvorlagen und Zerlegung diktierter Texte.
  * Es gibt bewusst keine allgemeine KI-Zerlegung: Unbekannte Aufgaben werden
  * mit eigenen Schritten erfasst.
  */
 
-/**
- * @typedef {{ text: string, smaller?: string[] }} TemplateStep
- * @typedef {{ id: string, title: string, keywords: string[], steps: TemplateStep[] }} Template
- */
-
-/** @type {Template[]} */
-export const BUILTIN_TEMPLATES = [
-  {
-    id: 'kueche',
-    title: 'Küche aufräumen',
-    keywords: ['küche', 'kueche', 'geschirr', 'abwasch', 'spülmaschine', 'spuelmaschine', 'spülen'],
-    steps: [
-      {
-        text: 'Benutztes Geschirr zur Spüle bringen',
-        smaller: ['Gläser und Tassen einsammeln', 'Teller und Besteck einsammeln', 'Töpfe und Pfannen zur Spüle stellen'],
-      },
-      { text: 'Spülmaschine ausräumen', smaller: ['Unteren Korb ausräumen', 'Oberen Korb und Besteck ausräumen'] },
-      { text: 'Spülmaschine einräumen und starten' },
-      { text: 'Töpfe und Pfannen von Hand spülen', smaller: ['Spülbecken mit warmem Wasser füllen', 'Einen Topf spülen und abstellen'] },
-      { text: 'Arbeitsfläche abwischen', smaller: ['Dinge von der Arbeitsfläche wegräumen', 'Arbeitsfläche feucht abwischen'] },
-      { text: 'Herd abwischen' },
-      { text: 'Müll rausbringen', smaller: ['Müllbeutel zubinden', 'Beutel zur Tonne bringen', 'Neuen Beutel einsetzen'] },
-    ],
-  },
-  {
-    id: 'waesche',
-    title: 'Wäsche erledigen',
-    keywords: ['wäsche', 'waesche', 'waschen', 'waschmaschine', 'klamotten', 'kleidung', 'trockner'],
-    steps: [
-      { text: 'Wäschekorb zur Maschine bringen' },
-      { text: 'Wäsche nach Farben sortieren', smaller: ['Helle Teile heraussuchen', 'Dunkle Teile heraussuchen', 'Restliche Teile auf einen Stapel legen'] },
-      { text: 'Maschine befüllen und Waschmittel einfüllen' },
-      { text: 'Programm wählen und starten' },
-      { text: 'Gewaschene Wäsche aufhängen', smaller: ['Wäscheständer aufstellen', 'Große Teile aufhängen', 'Kleine Teile aufhängen'] },
-      { text: 'Trockene Wäsche zusammenlegen', smaller: ['Shirts zusammenlegen', 'Hosen zusammenlegen', 'Socken paarweise zusammenlegen'] },
-      { text: 'Wäsche in den Schrank räumen' },
-    ],
-  },
-  {
-    id: 'verlassen',
-    title: 'Wohnung verlassen',
-    keywords: ['wohnung verlassen', 'haus verlassen', 'rausgehen', 'losgehen', 'aus dem haus', 'los müssen', 'aufbrechen', 'weggehen'],
-    steps: [
-      { text: 'Schlüssel, Handy und Geldbörse einstecken', smaller: ['Schlüssel einstecken', 'Handy einstecken', 'Geldbörse einstecken'] },
-      { text: 'Fenster schließen' },
-      { text: 'Herd und Geräte prüfen' },
-      { text: 'Licht ausschalten' },
-      { text: 'Jacke und Schuhe anziehen' },
-      { text: 'Tür abschließen' },
-    ],
-  },
-];
+import { ROOMS, orderedSteps, defaultSelection } from './rooms.js';
 
 export function normalize(text) {
   return String(text || '')
@@ -102,22 +51,29 @@ export function findRoutine(text, routines) {
   return bestScore >= 0.6 ? best : null;
 }
 
-/** @param {string} text */
+/**
+ * Ordnet einen eingegebenen Text einem Raum zu. Der Vorschlag enthält die
+ * häufigen Tätigkeiten dieses Raums in Ablaufreihenfolge.
+ * @param {string} text
+ * @returns {{ id: string, title: string, steps: string[] } | null}
+ */
 export function findTemplate(text) {
   const norm = normalize(text);
   if (!norm) return null;
-  for (const t of BUILTIN_TEMPLATES) {
-    if (t.keywords.some((k) => norm.includes(k))) return t;
+  for (const room of ROOMS) {
+    if (room.keywords.some((k) => norm.includes(k))) {
+      return { id: room.id, title: room.title, steps: orderedSteps(room, defaultSelection(room)) };
+    }
   }
   return null;
 }
 
-/** Sucht kleinere Schritte für einen Schritttext in den Vorlagen. */
+/** Sucht kleinere Schritte für einen Schritttext in den Raumvorlagen. */
 export function findSmallerSteps(stepText) {
   const norm = normalize(stepText);
-  for (const t of BUILTIN_TEMPLATES) {
-    for (const s of t.steps) {
-      if (s.smaller && normalize(s.text) === norm) return [...s.smaller];
+  for (const room of ROOMS) {
+    for (const a of room.activities) {
+      if (a.smaller && normalize(a.text) === norm) return [...a.smaller];
     }
   }
   return null;

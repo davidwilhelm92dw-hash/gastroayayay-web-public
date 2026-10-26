@@ -83,3 +83,55 @@ jobs:
           name: android-lint-bericht
           path: mindstella/android/app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
+
+  # Gerätetest im Android-Emulator: schmaler Bildschirm (360 dp), echte
+  # Touch-Eingaben, Rückkehrhilfe und Wiederaufnahme. Ergebnisse als Artefakt.
+  geraetetest:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    defaults:
+      run:
+        working-directory: mindstella
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Steuerung für die WebView installieren
+        run: npm install --no-save --no-package-lock playwright-core@1.48.2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mindstella-testfassung
+          path: mindstella
+
+      - name: KVM für den Emulator freigeben
+        working-directory: .
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Gerätetest im Emulator (Android 15)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          working-directory: mindstella
+          script: bash tools/device-test.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: geraetetest-ergebnisse
+          path: |
+            mindstella/device-shots/
+            mindstella/device-results.json
+            mindstella/device-test.log
+          if-no-files-found: ignore

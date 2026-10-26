@@ -5,13 +5,14 @@
  * Elementzahl kennen. Maße in Metern. Ursprung: Mitte der Grundfläche auf
  * Geländehöhe; +z zeigt zur Eingangsseite, +y nach oben.
  *
- * Konstruktion: Ständerbau auf Punktfundamenten. Die Holzunterkante liegt
- * 30 cm über dem Gelände (Spritzwasserschutz). Die Ausfachung sitzt zwischen
+ * Konstruktion: Ständerbau auf einem Sockel aus Natursteinen. Die
+ * Holzunterkante liegt 30 cm über dem Gelände (Spritzwasserschutz). Die Ausfachung sitzt zwischen
  * den Pfosten, die Kopfbänder bleiben an der Außenseite sichtbar.
  */
 
 export const PHASES = [
-  { id: 'unterbau', label: 'Unterbau', short: 'Fundamente und Schwellen' },
+  { id: 'material', label: 'Holz sammeln', short: 'Stämme zum Bauplatz tragen' },
+  { id: 'unterbau', label: 'Unterbau', short: 'Steinsockel und Schwellen' },
   { id: 'boden', label: 'Boden', short: 'Dielen auf den Balken' },
   { id: 'tragwerk', label: 'Tragwerk', short: 'Pfosten und Rähm' },
   { id: 'aussteifung', label: 'Aussteifung', short: 'Diagonale Kopfbänder' },
@@ -49,11 +50,29 @@ function add(phase, label, kind, size, pos, rot = [0, 0, 0], extra = {}) {
   els.push({ id: `e${String(els.length + 1).padStart(2, '0')}`, phase, label, kind, size, pos, rot, ...extra });
 }
 
-/* Unterbau: sechs Punktfundamente, dann Schwellen und Bodenbalken */
-for (const z of [-HZ, HZ]) {
-  for (const x of [-HX, 0, HX]) {
-    add('unterbau', 'Punktfundament', 'stone', [0.34, 0.48, 0.34], [x, 0.06, z]);
+/* Material: acht Stämme am Lagerplatz rechts vor der Hütte */
+export const LOG_PILE = { x: 3.35, z: 0.9 };
+const LOG_R = 0.13;
+const logRows = [4, 3, 1];
+logRows.forEach((n, row) => {
+  for (let i = 0; i < n; i++) {
+    const x = LOG_PILE.x + (i - (n - 1) / 2) * LOG_R * 2.05;
+    const y = LOG_R + row * LOG_R * 1.75;
+    add('material', 'Stamm', 'log', [LOG_R, 2.1, LOG_R], [x, y, LOG_PILE.z], [Math.PI / 2, 0, 0]);
   }
+});
+
+/* Unterbau: Sockel aus Natursteinen in sechs Abschnitten, dann Schwellen und Bodenbalken */
+const PLINTH_H = 0.3;
+const PL_T = 0.26; // Mauerstärke
+for (const [x0, x1, z] of [[-W / 2 - 0.05, 0, -HZ], [0, W / 2 + 0.05, -HZ]]) {
+  add('unterbau', 'Steinsockel', 'plinth', [x1 - x0, PLINTH_H, PL_T], [(x0 + x1) / 2, PLINTH_H / 2, z]);
+}
+for (const x of [-HX, HX]) {
+  add('unterbau', 'Steinsockel', 'plinth', [PL_T, PLINTH_H, 2 * HZ - PL_T], [x, PLINTH_H / 2, 0]);
+}
+for (const [x0, x1, z] of [[-W / 2 - 0.05, 0, HZ], [0, W / 2 + 0.05, HZ]]) {
+  add('unterbau', 'Steinsockel', 'plinth', [x1 - x0, PLINTH_H, PL_T], [(x0 + x1) / 2, PLINTH_H / 2, z]);
 }
 add('unterbau', 'Schwelle hinten', 'beam', [W + 0.1, 0.14, 0.16], [0, 0.37, -HZ]);
 add('unterbau', 'Schwelle vorn', 'beam', [W + 0.1, 0.14, 0.16], [0, 0.37, HZ]);
@@ -156,7 +175,7 @@ add('witterungsschutz', 'Regenrinne hinten', 'gutter', [roofLenX, 0.09, 0.1], [0
 // geöffneter Laden, flach neben der Fensteröffnung
 add('witterungsschutz', 'Fensterladen', 'shutter', [0.04, winTop - winBottom, innerZ - 0.06], [HX + 0.06, (winBottom + winTop) / 2, -(innerZ - 0.06) / 2 - 0.02]);
 add('witterungsschutz', 'Tür', 'door', [2 * DOOR_HALF - 0.12, wallH - 0.02, 0.05], [0, wallBottom + (wallH - 0.02) / 2, HZ]);
-add('witterungsschutz', 'Trittstein', 'stone', [0.9, 0.24, 0.42], [0, 0.04, HZ + 0.5]);
+add('witterungsschutz', 'Trittstein', 'step', [0.9, 0.24, 0.42], [0, 0.04, HZ + 0.5]);
 
 export const HUT_ELEMENTS = Object.freeze(els);
 export const HUT_ELEMENT_COUNT = els.length;
