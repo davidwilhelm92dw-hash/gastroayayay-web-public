@@ -33,11 +33,16 @@ function check(name, ok, detail = '') {
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}${detail ? ` – ${detail}` : ''}`);
 }
 let current = null;
-async function shot(name) {
+async function shot(name, { full = false } = {}) {
   if (LOCAL) return;
   const png = execFileSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 64 * 1024 * 1024 });
   writeFileSync(`device-shots/${name}.png`, png);
-  // kleine Vorschau der WebView ins Log, damit sie ohne Artefakt-Download prüfbar ist
+  // Gerätebild vollständig ins Log: die DevTools-Aufnahme enthält die WebGL-Ebene nicht
+  if (full) {
+    console.log(`=====PNG ${name}=====\n${png.toString('base64')}\n=====ENDE ${name}=====`);
+    return;
+  }
+  // sonst kleine Vorschau der Bedienoberfläche
   if (!current) return;
   try {
     const { data } = await current.send('Page.captureScreenshot', { format: 'jpeg', quality: 45, clip: { x: 0, y: 0, width: 360, height: 780, scale: 0.75 } }, 8000);
@@ -164,17 +169,24 @@ async function connect() {
   throw new Error('WebView-Debugging nicht erreichbar');
 }
 
-/** Lage der WebView auf dem Bildschirm (Statusleiste, Navigationsleiste). */
+/**
+ * Lage der WebView auf dem Bildschirm (Statusleiste, Navigationsleiste).
+ * uiautomator scheitert bei laufender 3D-Animation, deshalb wird kalibriert:
+ * ein Tipp auf eine bekannte Bildschirmstelle, die WebView meldet, wo er ankam.
+ */
 let webviewOffset = null;
-function readWebviewOffset() {
-  try {
-    const xml = adb('exec-out', 'uiautomator', 'dump', '/dev/tty');
-    const m = xml.match(/class="android\.webkit\.WebView"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
-    if (m) return { x: +m[1], y: +m[2], bottom: +m[4] };
-  } catch {
-    /* uiautomator nicht verfügbar */
-  }
-  return { x: 0, y: 0, bottom: null };
+async function calibrate(page) {
+  const sx = 360;
+  const sy = 300;
+  await page.evaluate(() => {
+    window.__tapProbe = null;
+    window.addEventListener('pointerdown', (e) => (window.__tapProbe = { x: e.clientX, y: e.clientY, dpr: devicePixelRatio }), { once: true, capture: true });
+  });
+  adb('shell', 'input', 'tap', String(sx), String(sy));
+  await sleep(800);
+  const probe = await page.evaluate(() => window.__tapProbe);
+  if (!probe) return { x: 0, y: 0, measured: false };
+  return { x: Math.round(sx - probe.x * probe.dpr), y: Math.round(sy - probe.y * probe.dpr), measured: true };
 }
 
 /** Echtes Antippen: Element in der WebView finden, Bildschirmkoordinaten per adb antippen. */
@@ -197,7 +209,6 @@ async function tapEl(page, selector) {
     await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: point });
     await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   } else {
-    if (!webviewOffset) webviewOffset = readWebviewOffset();
     const x = webviewOffset.x + Math.round(again.x * box.dpr);
     const y = webviewOffset.y + Math.round(again.y * box.dpr);
     adb('shell', 'input', 'tap', String(x), String(y));
@@ -232,11 +243,12 @@ async function main() {
   const info = await page.evaluate(() => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio, ua: navigator.userAgent, gl: !!document.createElement('canvas').getContext('webgl2') }));
   check('App startet, WebGL verfügbar', info.gl, JSON.stringify(info));
   if (!LOCAL) {
-    webviewOffset = readWebviewOffset();
-    console.log(`INFO WebView-Lage in Pixeln: ${JSON.stringify(webviewOffset)}`);
+    webviewOffset = await calibrate(page);
+    console.log(`INFO WebView-Versatz in Pixeln: ${JSON.stringify(webviewOffset)}`);
+    check('Tipp-Kalibrierung: Tipp kommt in der WebView an', webviewOffset.measured, JSON.stringify(webviewOffset));
   }
   await sleep(3000);
-  await shot('01-start');
+  await shot('01-start', { full: true });
   const gl = await page.evaluate(() => new Promise((resolve) => {
     const { world } = window.__mindstella;
     const r = world.renderer;
@@ -271,11 +283,7 @@ async function main() {
   }));
   const distinct = new Set(gl.samples).size;
   check('3D-Welt wird gerendert (Pixelprobe)', !gl.lost && gl.calls > 0 && distinct >= 3, JSON.stringify(gl));
-  if (!LOCAL) {
-    // vollständiges Bildschirmfoto als PNG ins Log, um WebView-Aufnahme und Bildschirm zu vergleichen
-    const png = execFileSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 64 * 1024 * 1024 });
-    console.log(`=====PNG 01-start=====\n${png.toString('base64')}\n=====ENDE 01-start=====`);
-  }
+
 
   await tapText(page, 'Kapitel 1 beginnen');
   await sleep(2500);
@@ -312,7 +320,7 @@ async function main() {
   await tapText(page, 'Aufgabe starten');
   await waitFor(page, () => document.querySelector('.task-card'));
   await waitFor(page, () => window.__mindstella.world.cameraSettled, 120000);
-  await shot('05-aufgabe');
+  await shot('05-aufgabe', { full: true });
   const rects = await page.evaluate(() => window.__mindstella.world.screenRects());
   const cardTop = await page.evaluate(() => document.querySelector('.task-card').getBoundingClientRect().top);
   const inside = (r) => r && r.left >= 0 && r.right <= rects.view.width && r.top >= rects.view.top && r.bottom <= cardTop;
@@ -327,9 +335,9 @@ async function main() {
   const after = (await S(page)).world.elementsBuilt;
   check('Erledigt löst Baufortschritt und sichtbare Handlung aus', after > before && busy, `${before} → ${after}`);
   await sleep(1500);
-  await shot('06-bauhandlung');
+  await shot('06-bauhandlung', { full: true });
   await waitFor(page, () => !window.__mindstella.world.busy, 120000);
-  await shot('07-nach-schritt');
+  await shot('07-nach-schritt', { full: true });
 
   if (LOCAL) {
     page.close();
