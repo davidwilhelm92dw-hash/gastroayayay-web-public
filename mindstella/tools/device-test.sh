@@ -11,12 +11,3 @@ adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
 adb install -r -g mindstella-kapitel1-*.apk
 node tools/device-test.mjs | tee device-test.log
-# kleine JPEG-Vorschauen ins Log, damit sie auch ohne Artefakt-Download prüfbar sind
-for f in device-shots/*.png; do
-  name=$(basename "$f" .png)
-  ffmpeg -loglevel error -y -i "$f" -vf scale=300:-1 -q:v 7 "device-shots/$name.jpg" || continue
-  echo "=====BILD $name====="
-  base64 -w 0 "device-shots/$name.jpg"
-  echo
-  echo "=====ENDE $name====="
-done

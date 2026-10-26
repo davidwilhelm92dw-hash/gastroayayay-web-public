@@ -226,7 +226,7 @@ export function createApp({ store, world, root }) {
       const template = routine ? null : findTemplate(parsed.title);
       let suggestion = null;
       if (routine) suggestion = { type: 'routine', id: routine.id, title: routine.title, steps: routine.steps };
-      else if (template) suggestion = { type: 'template', id: template.id, title: template.title, steps: template.steps.map((x) => x.text) };
+      else if (template) suggestion = { type: 'template', id: template.id, title: template.title, steps: [...template.steps] };
       const draft = {
         stage: 'edit',
         title: parsed.title,

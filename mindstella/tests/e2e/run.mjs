@@ -24,7 +24,7 @@ mkdirSync(SHOTS, { recursive: true });
 
 const results = [];
 // MINDSTELLA_ONLY=ablauf|listen|unbekannt|audio führt nur einen Abschnitt aus
-const want = (name) => !process.env.MINDSTELLA_ONLY || process.env.MINDSTELLA_ONLY === name;
+const want = (name) => !process.env.MINDSTELLA_ONLY || process.env.MINDSTELLA_ONLY.split(',').includes(name);
 function check(name, ok, detail = '') {
   results.push({ name, ok: Boolean(ok), detail });
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${name}${detail ? ` – ${detail}` : ''}`);
@@ -152,6 +152,7 @@ if (want('ablauf')) {
   let st = await S(page);
   check('Diktierte Schritte bleiben an erster Stelle erhalten', st.task.steps[0].text === 'Geschirr wegräumen' && st.task.steps[1].text === 'Arbeitsfläche wischen', st.task.steps.map((s) => s.text).join(' | '));
   check('Vorlage ergänzt weitere Schritte', st.task.steps.length > 2, `${st.task.steps.length} Schritte`);
+  check('Alle Schritte haben einen lesbaren Text', st.task.steps.every((x) => x.text && x.text !== 'undefined'));
   await page.waitForTimeout(1500);
   await shot(page, '07-aufgabe-start');
 
@@ -204,7 +205,7 @@ if (want('ablauf')) {
   // Schritt verkleinern
   const builtBeforeSplit = st.world.elementsBuilt;
   const openBefore = st.task.steps.filter((s) => !s.done).length;
-  await tap(page, 'Kleiner machen');
+  await tap(page, 'Schritt kleiner machen');
   await shot(page, '12-kleiner-machen');
   const inputs = page.locator('.sheet input.input');
   if ((await inputs.nth(0).inputValue()) === '') {
@@ -219,7 +220,7 @@ if (want('ablauf')) {
 
   // Wissenskarte öffnen und schließen ohne Änderung
   const snapshot = JSON.stringify((await S(page)).task);
-  await page.locator('.knowledge-hint').click();
+  await page.locator('.task-card .link-chip').tap();
   await page.waitForSelector('.sheet');
   await shot(page, '13-wissen');
   await page.getByRole('button', { name: 'Schließen' }).first().click();
@@ -362,7 +363,7 @@ let fixture = null;
 try {
   fixture = path.join(here, '.tmp-episode.wav');
   if (!existsSync(fixture)) {
-    execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=40', '-ac', '1', '-ar', '16000', fixture]);
+    execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=220:duration=300', '-ac', '1', '-ar', '16000', fixture]);
   }
 } catch {
   fixture = null;
