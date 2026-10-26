@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mindstella</string>
+    <string name="title_activity_main">Mindstella</string>
+    <string name="package_name">de.mindstella.prototyp</string>
+    <string name="custom_url_scheme">de.mindstella.prototyp</string>
+    <string name="reminder_channel_name">Rückkehrhilfe</string>
+    <string name="reminder_channel_description">Ein einzelner Hinweis auf deinen aktuellen Schritt, wenn du die App während einer Aufgabe länger als 30 Sekunden verlassen hast.</string>
+</resources>

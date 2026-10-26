@@ -1,0 +1,85 @@
+name: Mindstella Android-Testfassung
+
+# Baut die installierbare Debug-APK des Mindstella-Prototyps.
+# Läuft nur, wenn sich Dateien unter mindstella/ ändern, oder manuell.
+on:
+  push:
+    paths:
+      - 'mindstella/**'
+      - '.github/workflows/mindstella-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: mindstella
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mindstella/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Unit-Tests
+        run: npm test
+
+      - name: Web-Teil bauen und in das Android-Projekt kopieren
+        run: npx vite build && npx cap sync android
+
+      - name: Test-Keystore bereitstellen (optional)
+        env:
+          KEYSTORE_B64: ${{ secrets.MINDSTELLA_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/mindstella-test.jks"
+            echo "MINDSTELLA_KEYSTORE_FILE=$RUNNER_TEMP/mindstella-test.jks" >> "$GITHUB_ENV"
+          else
+            echo "Kein Test-Keystore hinterlegt: Die APK wird mit einem temporären Debug-Schlüssel signiert."
+          fi
+
+      - name: APK bauen
+        working-directory: mindstella/android
+        env:
+          MINDSTELLA_KEYSTORE_PASSWORD: ${{ secrets.MINDSTELLA_KEYSTORE_PASSWORD }}
+          MINDSTELLA_KEY_ALIAS: ${{ secrets.MINDSTELLA_KEY_ALIAS }}
+          MINDSTELLA_KEY_PASSWORD: ${{ secrets.MINDSTELLA_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Android-Lint (Bericht, bricht den Build nicht ab)
+        working-directory: mindstella/android
+        continue-on-error: true
+        run: ./gradlew --no-daemon lintDebug
+
+      - name: APK umbenennen
+        run: |
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          cp android/app/build/outputs/apk/debug/app-debug.apk "mindstella-kapitel1-${SHORT_SHA}.apk"
+          sha256sum mindstella-kapitel1-*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mindstella-testfassung
+          path: mindstella/mindstella-kapitel1-*.apk
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-lint-bericht
+          path: mindstella/android/app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore

@@ -1,0 +1,30 @@
+{
+  "name": "mindstella",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mindstella – Prototyp Kapitel 1: Ein Dach unter fremden Monden",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173",
+    "test": "node --test tests/unit/*.test.js",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "android:sync": "vite build && cap sync android",
+    "export:script": "node tools/export-script.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/haptics": "8.0.2",
+    "@capacitor/preferences": "8.0.1",
+    "@fontsource/atkinson-hyperlegible-next": "5.3.0",
+    "@fontsource/jost": "5.3.0",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "vite": "8.3.5"
+  }
+}

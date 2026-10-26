@@ -1,0 +1,8 @@
+{
+  "appId": "de.mindstella.prototyp",
+  "appName": "Mindstella",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#141b26"
+  }
+}
