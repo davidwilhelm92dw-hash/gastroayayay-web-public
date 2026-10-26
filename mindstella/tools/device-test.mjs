@@ -104,12 +104,13 @@ class Page {
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
     return r.result.value;
   }
-  async waitForFunction(fn, timeout) {
+  async waitForFunction(fn, timeout, arg) {
     const t0 = Date.now();
+    const argSrc = arg === undefined ? '' : JSON.stringify(arg);
     for (;;) {
       try {
         // nur den Wahrheitswert übertragen; Szenenobjekte sind nicht serialisierbar
-        if (await this.evaluateExpression(`Boolean((${fn.toString()})())`)) return;
+        if (await this.evaluateExpression(`Boolean((${fn.toString()})(${argSrc}))`)) return;
       } catch {
         /* Seite lädt noch */
       }
@@ -191,6 +192,7 @@ async function calibrate(page) {
 
 /** Echtes Antippen: Element in der WebView finden, Bildschirmkoordinaten per adb antippen. */
 async function tapEl(page, selector) {
+  await settle(page, (sel) => !!document.querySelector(sel), selector);
   const box = await page.evaluate((sel) => {
     const el = document.querySelector(sel);
     if (!el) return null;
@@ -216,6 +218,11 @@ async function tapEl(page, selector) {
   await sleep(700);
 }
 async function tapText(page, text, { contains = false } = {}) {
+  await settle(
+    page,
+    ([t, c]) => [...document.querySelectorAll('button')].some((b) => (c ? b.innerText.includes(t) : b.innerText.trim() === t) || b.getAttribute('aria-label') === t),
+    [text, contains]
+  );
   const sel = await page.evaluate(([t, c]) => {
     const el = [...document.querySelectorAll('button')].find((b) => (c ? b.innerText.includes(t) : b.innerText.trim() === t) || b.getAttribute('aria-label') === t);
     if (!el) return null;
@@ -226,7 +233,9 @@ async function tapText(page, text, { contains = false } = {}) {
   await tapEl(page, sel);
 }
 const S = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__mindstella.store.state)));
-const waitFor = (page, fn, timeout = 90000) => page.waitForFunction(fn, timeout);
+const waitFor = (page, fn, timeout = 90000, arg) => page.waitForFunction(fn, timeout, arg);
+/** Wartet auf einen Zustand; liefert true/false statt abzubrechen. */
+const settle = (page, fn, arg, timeout = 20000) => waitFor(page, fn, timeout, arg).then(() => true, () => false);
 
 async function main() {
   if (!LOCAL) {
@@ -282,37 +291,60 @@ async function main() {
     }));
   }));
   const distinct = new Set(gl.samples).size;
+  const fps = await page.evaluate(() => new Promise((resolve) => {
+    let n = 0;
+    const t0 = performance.now();
+    const tick = () => {
+      n++;
+      if (performance.now() - t0 < 4000) requestAnimationFrame(tick);
+      else resolve(+(n / ((performance.now() - t0) / 1000)).toFixed(1));
+    };
+    requestAnimationFrame(tick);
+  }));
+  console.log(`INFO Bildrate im Emulator (Software-Rendering, nicht repräsentativ für echte Geräte): ${fps} fps`);
   check('3D-Welt wird gerendert (Pixelprobe)', !gl.lost && gl.calls > 0 && distinct >= 3, JSON.stringify(gl));
 
 
   await tapText(page, 'Kapitel 1 beginnen');
   await sleep(2500);
   await shot('02-bauuebersicht');
-  check('Bauübersicht mit 8 Abschnitten', (await page.evaluate(() => document.querySelectorAll('.phase-steps li').length)) === 8);
+  check('Bauübersicht mit 8 Abschnitten', await settle(page, () => document.querySelectorAll('.phase-steps li').length === 8));
   await tapText(page, 'Aufgabe auswählen');
   await tapEl(page, '#open-rooms');
-  check('Raumauswahl öffnet per Antippen', (await page.evaluate(() => document.querySelectorAll('[data-room]').length)) === 6);
+  check('Raumauswahl öffnet per Antippen', await settle(page, () => document.querySelectorAll('[data-room]').length === 6));
   await shot('03-raeume');
 
   let roomsOk = 0;
   for (const id of ['kueche', 'bad', 'wohnzimmer', 'schlafzimmer', 'flur', 'waesche']) {
     await tapEl(page, `[data-room="${id}"]`);
-    const n = await page.evaluate(() => document.querySelectorAll('[data-activity]').length);
+    await settle(page, () => document.querySelectorAll('[data-activity]').length > 0);
     const first = await page.evaluate(() => document.querySelector('[data-activity]')?.dataset.activity);
-    if (n > 0 && first) {
+    if (first) {
+      const was = await page.evaluate((f) => document.querySelector(`[data-activity="${f}"]`).getAttribute('aria-checked'), first);
+      const want = was === 'true' ? 'false' : 'true';
       await tapEl(page, `[data-activity="${first}"]`);
-      const on = await page.evaluate((f) => document.querySelector(`[data-activity="${f}"]`).getAttribute('aria-checked'), first);
-      if (on === 'true') roomsOk++;
+      if (await settle(page, ([f, w]) => document.querySelector(`[data-activity="${f}"]`)?.getAttribute('aria-checked') === w, [first, want])) roomsOk++;
       await tapEl(page, `[data-activity="${first}"]`);
+      await settle(page, ([f, w]) => document.querySelector(`[data-activity="${f}"]`)?.getAttribute('aria-checked') === w, [first, was]);
     }
     await tapText(page, 'Räume');
+    await settle(page, () => document.querySelectorAll('[data-room]').length === 6);
   }
   check('Alle sechs Raumkacheln und je eine Tätigkeit reagieren auf echtes Antippen', roomsOk === 6, `${roomsOk}/6`);
 
   await tapEl(page, '[data-room="bad"]');
-  for (const a of ['b-toilette', 'b-spiegel', 'b-becken']) await tapEl(page, `[data-activity="${a}"]`);
+  // Standardauswahl leeren, dann bewusst in falscher Reihenfolge antippen
+  for (const a of await page.evaluate(() => [...document.querySelectorAll('[data-activity][aria-checked="true"]')].map((e) => e.dataset.activity))) {
+    await tapEl(page, `[data-activity="${a}"]`);
+    await settle(page, (x) => document.querySelector(`[data-activity="${x}"]`)?.getAttribute('aria-checked') === 'false', a);
+  }
+  for (const a of ['b-toilette', 'b-spiegel', 'b-becken']) {
+    await tapEl(page, `[data-activity="${a}"]`);
+    await settle(page, (x) => document.querySelector(`[data-activity="${x}"]`)?.getAttribute('aria-checked') === 'true', a);
+  }
   await shot('04-taetigkeiten');
   await tapEl(page, '#activities-next');
+  await settle(page, () => document.querySelectorAll('.step-item input').length > 0);
   const steps = await page.evaluate(() => [...document.querySelectorAll('.step-item input')].map((i) => i.value));
   check('Bad-Ablauf in sinnvoller Reihenfolge, Toilette zuletzt', steps.at(-1) === 'Toilette reinigen' && steps[0] === 'Spiegel putzen', steps.join(' | '));
   await tapText(page, 'Weiter');
@@ -330,7 +362,7 @@ async function main() {
 
   const before = (await S(page)).world.elementsBuilt;
   await tapEl(page, '.btn--done');
-  await sleep(600);
+  await settle(page, (b) => window.__mindstella.store.state.world.elementsBuilt > b, before);
   const busy = await page.evaluate(() => window.__mindstella.world.busy);
   const after = (await S(page)).world.elementsBuilt;
   check('Erledigt löst Baufortschritt und sichtbare Handlung aus', after > before && busy, `${before} → ${after}`);
