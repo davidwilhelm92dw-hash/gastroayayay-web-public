@@ -217,6 +217,22 @@ async function tapEl(page, selector) {
   }
   await sleep(700);
 }
+/**
+ * Navigationstipp mit Wiederholung: Im Emulator ohne Grafikkarte gehen
+ * einzelne Tipps bei sehr niedriger Bildrate verloren. Nur für Knöpfe, deren
+ * zweites Antippen nichts umschaltet.
+ */
+async function tapUntil(page, tap, expect, arg, label) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    await tap();
+    if (await settle(page, expect, arg, 15000)) {
+      if (attempt > 1) console.log(`INFO ${label}: erst beim ${attempt}. Tipp angekommen`);
+      return true;
+    }
+  }
+  return false;
+}
+
 async function tapText(page, text, { contains = false } = {}) {
   await settle(
     page,
@@ -305,19 +321,17 @@ async function main() {
   check('3D-Welt wird gerendert (Pixelprobe)', !gl.lost && gl.calls > 0 && distinct >= 3, JSON.stringify(gl));
 
 
-  await tapText(page, 'Kapitel 1 beginnen');
-  await sleep(2500);
+  await tapUntil(page, () => tapText(page, 'Kapitel 1 beginnen'), () => document.querySelectorAll('.phase-steps li').length > 0, undefined, 'Kapitel 1 beginnen');
   await shot('02-bauuebersicht');
   check('Bauübersicht mit 8 Abschnitten', await settle(page, () => document.querySelectorAll('.phase-steps li').length === 8));
-  await tapText(page, 'Aufgabe auswählen');
-  await tapEl(page, '#open-rooms');
+  await tapUntil(page, () => tapText(page, 'Aufgabe auswählen'), () => !!document.querySelector('#open-rooms'), undefined, 'Aufgabe auswählen');
+  await tapUntil(page, () => tapEl(page, '#open-rooms'), () => document.querySelectorAll('[data-room]').length === 6, undefined, 'Hausarbeit auswählen');
   check('Raumauswahl öffnet per Antippen', await settle(page, () => document.querySelectorAll('[data-room]').length === 6));
   await shot('03-raeume');
 
   let roomsOk = 0;
   for (const id of ['kueche', 'bad', 'wohnzimmer', 'schlafzimmer', 'flur', 'waesche']) {
-    await tapEl(page, `[data-room="${id}"]`);
-    await settle(page, () => document.querySelectorAll('[data-activity]').length > 0);
+    await tapUntil(page, () => tapEl(page, `[data-room="${id}"]`), () => document.querySelectorAll('[data-activity]').length > 0, undefined, `Raum ${id}`);
     const first = await page.evaluate(() => document.querySelector('[data-activity]')?.dataset.activity);
     if (first) {
       const was = await page.evaluate((f) => document.querySelector(`[data-activity="${f}"]`).getAttribute('aria-checked'), first);
@@ -327,12 +341,11 @@ async function main() {
       await tapEl(page, `[data-activity="${first}"]`);
       await settle(page, ([f, w]) => document.querySelector(`[data-activity="${f}"]`)?.getAttribute('aria-checked') === w, [first, was]);
     }
-    await tapText(page, 'Räume');
-    await settle(page, () => document.querySelectorAll('[data-room]').length === 6);
+    await tapUntil(page, () => tapText(page, 'Räume'), () => document.querySelectorAll('[data-room]').length === 6, undefined, 'Räume');
   }
   check('Alle sechs Raumkacheln und je eine Tätigkeit reagieren auf echtes Antippen', roomsOk === 6, `${roomsOk}/6`);
 
-  await tapEl(page, '[data-room="bad"]');
+  await tapUntil(page, () => tapEl(page, '[data-room="bad"]'), () => document.querySelectorAll('[data-activity]').length > 0, undefined, 'Raum bad');
   // Standardauswahl leeren, dann bewusst in falscher Reihenfolge antippen
   for (const a of await page.evaluate(() => [...document.querySelectorAll('[data-activity][aria-checked="true"]')].map((e) => e.dataset.activity))) {
     await tapEl(page, `[data-activity="${a}"]`);
@@ -343,13 +356,12 @@ async function main() {
     await settle(page, (x) => document.querySelector(`[data-activity="${x}"]`)?.getAttribute('aria-checked') === 'true', a);
   }
   await shot('04-taetigkeiten');
-  await tapEl(page, '#activities-next');
-  await settle(page, () => document.querySelectorAll('.step-item input').length > 0);
+  await tapUntil(page, () => tapEl(page, '#activities-next'), () => document.querySelectorAll('.step-item input').length > 0, undefined, 'Weiter zu den Schritten');
   const steps = await page.evaluate(() => [...document.querySelectorAll('.step-item input')].map((i) => i.value));
   check('Bad-Ablauf in sinnvoller Reihenfolge, Toilette zuletzt', steps.at(-1) === 'Toilette reinigen' && steps[0] === 'Spiegel putzen', steps.join(' | '));
-  await tapText(page, 'Weiter');
+  await tapUntil(page, () => tapText(page, 'Weiter'), () => [...document.querySelectorAll('button')].some((b) => b.innerText.includes('Ohne Audio')), undefined, 'Weiter zur Hörwahl');
   await tapText(page, 'Ohne Audio', { contains: true });
-  await tapText(page, 'Aufgabe starten');
+  await tapUntil(page, () => tapText(page, 'Aufgabe starten'), () => !!document.querySelector('.task-card'), undefined, 'Aufgabe starten');
   await waitFor(page, () => document.querySelector('.task-card'));
   await waitFor(page, () => window.__mindstella.world.cameraSettled, 120000);
   await shot('05-aufgabe', { full: true });
