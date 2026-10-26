@@ -13,11 +13,16 @@
  * sendet. Deshalb spricht das Skript das DevTools-Protokoll direkt über
  * WebSocket an (Node 22 bringt WebSocket mit) und nutzt nur Runtime.evaluate
  * und Page.captureScreenshot.
+ *
+ * Trockenlauf ohne Emulator: MINDSTELLA_CDP=http://127.0.0.1:9222 node tools/device-test.mjs
+ * verbindet sich mit einem lokal gestarteten Chromium, tippt per DevTools
+ * statt per adb und endet vor den Android-spezifischen Prüfungen.
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const PKG = 'de.mindstella.prototyp';
+const LOCAL = process.env.MINDSTELLA_CDP || '';
 const results = [];
 mkdirSync('device-shots', { recursive: true });
 
@@ -29,6 +34,7 @@ function check(name, ok, detail = '') {
 }
 let current = null;
 async function shot(name) {
+  if (LOCAL) return;
   const png = execFileSync('adb', ['exec-out', 'screencap', '-p'], { maxBuffer: 64 * 1024 * 1024 });
   writeFileSync(`device-shots/${name}.png`, png);
   // kleine Vorschau der WebView ins Log, damit sie ohne Artefakt-Download prüfbar ist
@@ -79,7 +85,9 @@ class Page {
     });
   }
   async evaluate(fn, arg) {
-    const expression = `(${fn.toString()})(${arg === undefined ? '' : JSON.stringify(arg)})`;
+    return this.evaluateExpression(`(${fn.toString()})(${arg === undefined ? '' : JSON.stringify(arg)})`);
+  }
+  async evaluateExpression(expression) {
     const r = await this.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
     return r.result.value;
@@ -88,7 +96,8 @@ class Page {
     const t0 = Date.now();
     for (;;) {
       try {
-        if (await this.evaluate(fn)) return;
+        // nur den Wahrheitswert übertragen; Szenenobjekte sind nicht serialisierbar
+        if (await this.evaluateExpression(`Boolean((${fn.toString()})())`)) return;
       } catch {
         /* Seite lädt noch */
       }
@@ -105,9 +114,25 @@ class Page {
   }
 }
 
+async function openTarget(targets) {
+  const target = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
+  if (!target) return null;
+  const ws = new WebSocket(target.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => {
+    ws.addEventListener('open', resolve, { once: true });
+    ws.addEventListener('error', () => reject(new Error('WebSocket-Fehler')), { once: true });
+  });
+  current = new Page(ws);
+  return current;
+}
+
 async function connect() {
   if (current) current.close();
   current = null;
+  if (LOCAL) {
+    const targets = await (await fetch(`${LOCAL}/json`)).json();
+    return openTarget(targets);
+  }
   for (let i = 0; i < 30; i++) {
     const sockets = adb('shell', 'cat', '/proc/net/unix');
     const m = sockets.match(/@(webview_devtools_remote_\d+)/);
@@ -120,16 +145,8 @@ async function connect() {
       adb('forward', 'tcp:9222', `localabstract:${m[1]}`);
       try {
         const targets = await (await fetch('http://127.0.0.1:9222/json')).json();
-        const target = targets.find((t) => t.type === 'page' && t.webSocketDebuggerUrl);
-        if (target) {
-          const ws = new WebSocket(target.webSocketDebuggerUrl);
-          await new Promise((resolve, reject) => {
-            ws.addEventListener('open', resolve, { once: true });
-            ws.addEventListener('error', () => reject(new Error('WebSocket-Fehler')), { once: true });
-          });
-          current = new Page(ws);
-          return current;
-        }
+        const page = await openTarget(targets);
+        if (page) return page;
       } catch {
         /* Socket noch nicht bereit */
       }
@@ -154,8 +171,14 @@ async function tapEl(page, selector) {
     const r = document.querySelector(sel).getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }, selector);
-  // Ab Android 15 läuft die App randlos: WebView-Koordinaten = Bildschirmkoordinaten
-  adb('shell', 'input', 'tap', String(Math.round(again.x * box.dpr)), String(Math.round(again.y * box.dpr)));
+  if (LOCAL) {
+    const point = [{ x: again.x, y: again.y }];
+    await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: point });
+    await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    // Ab Android 15 läuft die App randlos: WebView-Koordinaten = Bildschirmkoordinaten
+    adb('shell', 'input', 'tap', String(Math.round(again.x * box.dpr)), String(Math.round(again.y * box.dpr)));
+  }
   await sleep(700);
 }
 async function tapText(page, text, { contains = false } = {}) {
@@ -172,9 +195,11 @@ const S = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.__minds
 const waitFor = (page, fn, timeout = 90000) => page.waitForFunction(fn, timeout);
 
 async function main() {
-  adb('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS');
-  adb('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
-  await sleep(8000);
+  if (!LOCAL) {
+    adb('shell', 'pm', 'grant', PKG, 'android.permission.POST_NOTIFICATIONS');
+    adb('shell', 'am', 'start', '-n', `${PKG}/.MainActivity`);
+    await sleep(8000);
+  }
   let page = await connect();
   await waitFor(page, () => window.__mindstella);
   const info = await page.evaluate(() => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio, ua: navigator.userAgent, gl: !!document.createElement('canvas').getContext('webgl2') }));
@@ -235,6 +260,11 @@ async function main() {
   await shot('06-bauhandlung');
   await waitFor(page, () => !window.__mindstella.world.busy, 120000);
   await shot('07-nach-schritt');
+
+  if (LOCAL) {
+    page.close();
+    return;
+  }
 
   // Rückkehrhilfe
   adb('shell', 'input', 'keyevent', 'KEYCODE_HOME');
